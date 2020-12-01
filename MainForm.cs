@@ -18,6 +18,8 @@ using Microsoft.WindowsAPICodePack.Taskbar;
 using MediaToolkit.Model;
 using MediaToolkit;
 using MediaToolkit.Options;
+using YoutubeExtractor;
+using VideoLibrary;
 
 namespace CreateSheetsFromVideo
 {
@@ -57,7 +59,8 @@ namespace CreateSheetsFromVideo
         private const string TonesPath = @"C:\Users\Dustin\Desktop\tones";
 
         // Video file
-        private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow.mp4";
+        //private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow.mp4";
+        private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow 360.mp4";
 
         // Settings
         private const ColorMode KeyColorMode = ColorMode.All;
@@ -125,16 +128,15 @@ namespace CreateSheetsFromVideo
 
         public MainForm()
         {
+            //SaveYoutubeVideo(@"https://www.youtube.com/watch?v=lPtl-gBpGG8");
+
             InitializeComponent();
             InitializeUI();
 
             mediaPlayer.URL = VideoPath;
             mediaPlayer.Ctlcontrols.currentPosition = StartTime;
             mediaPlayer.Ctlcontrols.stop();
-            //mediaPlayer.Ctlcontrols.currentPosition;
-            mediaPlayer.Ctlcontrols.play();
-            mediaPlayer.PositionChange += MediaPlayer_PositionChange;
-            //mediaPlayer.Ctlcontrols.stop();
+            //mediaPlayer.Ctlcontrols.play();
 
             if (Mode == AppMode.Load)
             {
@@ -160,12 +162,23 @@ namespace CreateSheetsFromVideo
                 {
                     while (frameIndex < videoReader.FrameCount)
                     {
-                        while (mediaPlayer.Ctlcontrols.currentPosition < CurrentTime)
-                        {
-                            Thread.Sleep(20);
-                        }
+                        var watch = new System.Diagnostics.Stopwatch();
+                        watch.Start();
+                        //while (watch.El)
+                        Thread.Sleep(1000000);
+                        //double mediaPlayerTime = 0;
+                        //while (mediaPlayerTime < CurrentTime)
+                        //{
+                        //    try
+                        //    {
+                        //        mediaPlayerTime = mediaPlayer.Ctlcontrols.currentPosition;
+                        //    }
+                        //    catch { }
+                        //    Thread.Sleep(1);
+                        //}
 
-                        PlayNextFrame();
+                        this.InvokeIfRequired(()
+                            => PlayNextFrame());
                     }
                 }).Start();
 
@@ -173,9 +186,18 @@ namespace CreateSheetsFromVideo
             };
         }
 
-        private void MediaPlayer_PositionChange(object sender, AxWMPLib._WMPOCXEvents_PositionChangeEvent e)
+        void SaveYoutubeVideo(string link)
         {
-            throw new NotImplementedException();
+            YouTube youTube = YouTube.Default; // starting point for YouTube actions
+            YouTubeVideo video = youTube.GetVideo(link); // gets a Video object with info about the video
+            File.WriteAllBytes(@"C:\Users\Dustin\Desktop\" + video.FullName, video.GetBytes());
+        }
+
+        private void PlayFrame()
+        {
+            int frameIndex = (int)(mediaPlayer.Ctlcontrols.currentPosition / VideoDuration * FrameCount);
+            Frame = videoReader.ReadVideoFrame(frameIndex);
+            mediaPlayer.Ctlcontrols.currentPosition = CurrentTime;
         }
 
         private bool ShowVisuals => checkBoxShowVisuals.Checked;
@@ -305,6 +327,7 @@ namespace CreateSheetsFromVideo
             videoReader.Open(path);
             SetFrameIndexToStart();
             UpdateFrameToFrameIndex();
+            pictureBox.Size = new Size(FrameWidth, FrameHeight);
             pianoKeys = InitializePianoKeys();
         }
 
@@ -375,14 +398,14 @@ namespace CreateSheetsFromVideo
                 isPlaying = !isPlaying;
             }
 
-            if (isPlaying)
-            {
-                mediaPlayer.Ctlcontrols.play();
-            }
-            else
-            {
-                mediaPlayer.Ctlcontrols.pause();
-            }
+            //if (isPlaying)
+            //{
+            //    mediaPlayer.Ctlcontrols.play();
+            //}
+            //else
+            //{
+            //    mediaPlayer.Ctlcontrols.pause();
+            //}
         }
 
         private void PlayPreviousFrame()
@@ -505,7 +528,10 @@ namespace CreateSheetsFromVideo
         private void UpdateFrameToFrameIndex()
         {
             Frame?.Dispose();
+
+            Watch.Start();
             Frame = new Bitmap(videoReader.ReadVideoFrame((int)frameIndex), pictureBox.Width, pictureBox.Height);
+            Watch.Measure(Log);
 
             // Set taskbar progress
             TaskbarManager.Instance.SetProgressState(TaskbarProgressBarState.Normal);
@@ -516,259 +542,231 @@ namespace CreateSheetsFromVideo
 
         private List<PianoKey> InitializePianoKeys()
         {
-            DirectBitmap bitmap = new DirectBitmap(Frame);
+            const double BrightnessOffset = 0.7;
+            const double MaxPercentageOfHeightToRecognizeKeys = 0.82;
 
-            // Find y with lowest deviation of bright values
-
-            List<LineWithStatistics> linesWidthStatistics = new List<LineWithStatistics>();
-
-            for (int y = FrameHeight - 300; y < FrameHeight; y += 10)
+            using (DirectBitmap bitmap = new DirectBitmap(Frame))
             {
-                //y = FrameHeight - 200;
-                bool[] boolArray = new bool[FrameWidth];
-                for (int x = 0; x < FrameWidth; x++)
-                {
-                    boolArray[x] = bitmap.IsBright(x, y);
+                // Find y with lowest deviation of bright values
+                List<LineWithStatistics> linesWithStatistics = new List<LineWithStatistics>();
 
-                    // Colorize pixels green or red (bright or dark)
-                    //bitmap.SetPixel(x, y, boolArray[x] ? Color.Green : Color.Red);
+                for (int y = (int)(MaxPercentageOfHeightToRecognizeKeys * FrameHeight); y < FrameHeight; y += 10)
+                {
+                    // Collect brightness values
+                    List<double> brightnessValues = new List<double>();
+                    for (int x = 0; x < FrameWidth; x += 1)
+                    {
+                        brightnessValues.Add(bitmap.GetPixel(x, y).GetBrightness());
+                    }
+
+                    linesWithStatistics.Add(new LineWithStatistics(y, brightnessValues));
                 }
-                //Log(string.Join(", ", boolArray.Take(10)));
+
+                // Find brightest + darkest line (for white + black keys)
+                LineWithStatistics brightnessLine = null;
+                LineWithStatistics darkestLine = null;
+                foreach (LineWithStatistics currentLine in linesWithStatistics.Where(it => !double.IsNaN(it.WhiteKeyDistanceMean) && !double.IsNaN(it.DarkKeyDistanceMean)))
+                {
+                    if (brightnessLine == null
+                        || currentLine.MeanBrightness > brightnessLine.MeanBrightness)
+                    {
+                        brightnessLine = currentLine;
+                    }
+                    if (darkestLine == null
+                        || currentLine.MeanBrightness < darkestLine.MeanBrightness)
+                    {
+                        darkestLine = currentLine;
+                    }
+                }
 
                 // Saves number of light and dark pixels in a row
-                List<int> valueList = new List<int>(FrameWidth) { 0 };
-                bool previousBool = boolArray[0];
+                List<int> sectionsWidths = new List<int>(FrameWidth) { 0 }; // Number of dark and light pixels in a row
+                bool previousPixelIsBright = brightnessLine.BrightnessValues[0] > BrightnessOffset;
                 for (int x = 1; x < FrameWidth; x++)
                 {
-                    bool currentBool = boolArray[x];
-                    if (currentBool == previousBool)
+                    bool currentPixelIsBright = brightnessLine.BrightnessValues[x] > BrightnessOffset;
+                    if (currentPixelIsBright == previousPixelIsBright)
                     {
-                        valueList[valueList.Count - 1]++;
+                        sectionsWidths[sectionsWidths.Count - 1]++;
                     }
                     else
                     {
-                        valueList.Add(1);
+                        sectionsWidths.Add(1);
                     }
-                    previousBool = currentBool;
+                    previousPixelIsBright = currentPixelIsBright;
                 }
 
-                // Split into light and dark
-                List<int> pixelsA = new List<int>();
-                List<int> pixelsB = new List<int>();
-                bool toggle = false;
-                foreach (int value in valueList)
+                // Calc key distance
+                List<int> list1 = new List<int>();
+                List<int> list2 = new List<int>();
+                for (int i = 0; i < sectionsWidths.Count - 1; i += 2)
                 {
-                    toggle = !toggle;
-                    if (toggle)
+                    list1.Add(sectionsWidths[i]); // White/Black pixels in a row
+                    list2.Add(sectionsWidths[i + 1]); // Black/White pixels in a row
+                }
+                double keyDistance = list1.Sum() / list1.Count + list2.Sum() / list2.Count;
+
+
+                // Set white key points
+                List<Point> whiteKeyPoints = new List<Point>();
+
+                int xPos = (int)(keyDistance / 2);
+                //whiteKeyPoints.Add(new Point(xPos, brightnessLine.Y));
+                for (int i = 0; i < sectionsWidths.Count - 1; i += 2)
+                {
+                    bitmap.SetPixel4(xPos, brightnessLine.Y, Color.Brown);
+                    whiteKeyPoints.Add(new Point(xPos, brightnessLine.Y));
+                    xPos += sectionsWidths[i] + sectionsWidths[i + 1];
+                }
+
+                // Set black key points
+                List<Point> blackKeyPoints = new List<Point>();
+
+                xPos = (int)keyDistance;
+                for (int i = 0; i < whiteKeyPoints.Count - 1; i++)
+                {
+                    xPos = (whiteKeyPoints[i].X + whiteKeyPoints[i + 1].X) / 2;
+                    // Left and right must be also dark (else its just the gap between two whites)
+                    if (darkestLine.BrightnessValues[xPos - 1] < BrightnessOffset
+                        && darkestLine.BrightnessValues[xPos + 1] < BrightnessOffset)
                     {
-                        pixelsA.Add(value);
+                        bitmap.SetPixel4(xPos, darkestLine.Y, Color.Yellow);
+                        blackKeyPoints.Add(new Point(xPos, darkestLine.Y));
                     }
-                    else
+                }
+
+                if (blackKeyPoints.Count == 0 || whiteKeyPoints.Count == 0)
+                {
+                    throw new Exception("Could not find keys.");
+                }
+
+
+
+                // Create white & black keye
+
+                List<PianoKey> blackKeys = blackKeyPoints.Select(point => new PianoKey(point, bitmap)).ToList();
+                List<PianoKey> whiteKeys = whiteKeyPoints.Select(point => new PianoKey(point, bitmap)).ToList();
+
+                // Find black key - Cis1
+
+                for (int index = 0; index < blackKeys.Count - 1; index++)
+                {
+                    blackKeys[index].DistanceToNext = blackKeys[index + 1].Point.X - blackKeys[index].Point.X;
+                }
+                var distances = blackKeys.Select(point => point.DistanceToNext).Where(dist => dist != 0).ToList();
+                Log("Distances = " + distances.ToLog());
+                double average = distances.Average();
+                List<double> valuesBelowAverage = distances.Where(dist => dist < average).ToList();
+                List<double> valuesAboveAverage = distances.Where(dist => dist > average).ToList();
+                double shortDistance = valuesBelowAverage.Average();
+                double longDistance = valuesAboveAverage.Average();
+                //Log("Above: " + longDistanceToDecimalString() + " +- " + valuesAboveAverage.StandardDeviation().ToDecimalString() + ", " +
+                //    "Below: " + shortDistance.ToDecimalString() + " +- " + valuesBelowAverage.StandardDeviation().ToDecimalString());
+
+
+                // Assign pitch values to black keys
+
+                for (int index = 0; index < blackKeys.Count - 3; index++)
+                {
+                    // These black key distances clearly identify the first Cis
+                    if (blackKeys[index].DistanceToNext.IsAboutRel(shortDistance)
+                        && blackKeys[index + 1].DistanceToNext.IsAboutRel(longDistance)
+                        && blackKeys[index + 2].DistanceToNext.IsAboutRel(shortDistance)
+                        && blackKeys[index + 3].DistanceToNext.IsAboutRel(shortDistance))
                     {
-                        pixelsB.Add(value);
+                        // Tone is C#
+                        blackKeys[index].Pitch = (Pitch)BlackPitch.Cis1;
+                        BlackPitch startTone = BlackPitch.Cis1;
+                        int startIndex = index;
+
+                        // Set lower tones
+                        index = startIndex;
+                        BlackPitch previousTone = startTone;
+                        while (index > 0)
+                        {
+                            previousTone = previousTone.Previous();
+                            blackKeys[--index].Pitch = (Pitch)previousTone;
+                        }
+
+                        // Set higher tones
+                        index = startIndex;
+                        BlackPitch nextTone = startTone;
+                        while (index < blackKeys.Count - 1)
+                        {
+                            nextTone = nextTone.Next();
+                            blackKeys[++index].Pitch = (Pitch)nextTone;
+                        }
+
+                        break;
                     }
                 }
-                bool aIsBright = pixelsA.Sum() > pixelsB.Sum();
-                List<int> brightPixels = aIsBright ? pixelsA : pixelsB;
-                List<int> darkPixels = aIsBright ? pixelsB : pixelsA;
-
-                //Log("Bright) " + string.Join(", ", brightPixels.Take(20)));
-                //Log("Dark) " + string.Join(", ", darkPixels.Take(20)));
-
-                double brightMean = (double)brightPixels.Sum() / brightPixels.Count;
-                double darkMean = (double)darkPixels.Sum() / darkPixels.Count;
-                //Log("Bright mean = " + brightMean);
-
-                linesWidthStatistics.Add(new LineWithStatistics(y, brightPixels, darkPixels));
-                //break;
-            }
 
 
-            // WHITE KEYS
+                // Colorize black keys
 
-            // Find pair with lowest white deviation = white keys
-            LineWithStatistics line = null;
-            foreach (LineWithStatistics currentLine in linesWidthStatistics.Where(it => !double.IsNaN(it.BrightMean) && !double.IsNaN(it.DarkMean)))
-            {
-                if (line == null || currentLine.BrightDeviation < line.BrightDeviation)
+                foreach (PianoKey point in blackKeys)
                 {
-                    line = currentLine;
+                    bitmap.SetPixel4(point.Point, ColorForTone(point.Pitch));
                 }
-            }
-
-            double keyDistance = line.BrightMean + line.DarkMean;
 
 
-            // Get measure points white keys
-            List<Point> whitePoints = new List<Point>();
+                // Find white key - C1
+                ///////////////////////
 
-            for (double x = 0.5 * keyDistance; x < FrameWidth; x += keyDistance)
-            {
-                whitePoints.Add(new Point((int)x, line.Y));
-                //bitmap.SetPixel4((int)x, pairWhiteKeys.Y, Color.Violet);
-            }
+                PianoKey KeyCis1 = blackKeys.Where(p => p.Pitch == Pitch.Cis1).First();
+                int xPositionC1 = (int)(KeyCis1.Point.X - 0.5 * keyDistance);
 
-            if (whitePoints.Count == 0)
-            {
-                throw new Exception("Could not find white keys.");
-            }
+                // Find white key nearest to C1
 
-
-            // BLACK KEYS
-
-            // Find pair with low white deviation & high black deviation = black keys
-            LineWithStatistics pairBlacksKeys = null;
-            foreach (LineWithStatistics pair in linesWidthStatistics.Where(it => !double.IsNaN(it.BrightMean) && !double.IsNaN(it.DarkMean)))
-            {
-                if (pairBlacksKeys == null || pair.BrightDeviation - pair.DarkDeviation < pairBlacksKeys.BrightDeviation - pairBlacksKeys.DarkDeviation)
+                PianoKey keyC1 = null;
+                foreach (PianoKey currentKey in whiteKeys)
                 {
-                    pairBlacksKeys = pair;
-                }
-            }
-
-            // Get measure points black keys
-            List<Point> blackPoints = new List<Point>();
-
-            for (double x = keyDistance; x < FrameWidth; x += keyDistance)
-            {
-                if (!bitmap.IsBright((int)x, pairBlacksKeys.Y)
-                    && !bitmap.IsBright((int)x + 3, pairBlacksKeys.Y))
-                {
-                    blackPoints.Add(new Point((int)x, pairBlacksKeys.Y));
-                    //bitmap.SetPixel4((int)x, pairBlacksKeys.Y, Color.Orange);
-                }
-            }
-
-            if (blackPoints.Count == 0)
-            {
-                throw new Exception("Could not find black keys.");
-            }
-
-            // Create white & black keye
-
-            List<PianoKey> blackKeys = blackPoints.Select(point => new PianoKey(point, bitmap)).ToList();
-            List<PianoKey> whiteKeys = whitePoints.Select(point => new PianoKey(point, bitmap)).ToList();
-
-            // Find black key - Cis1
-
-            for (int index = 0; index < blackKeys.Count - 1; index++)
-            {
-                blackKeys[index].DistanceToNext = blackKeys[index + 1].Point.X - blackKeys[index].Point.X;
-            }
-            var distances = blackKeys.Select(point => point.DistanceToNext).Where(dist => dist != 0).ToList();
-            Log("Distances = " + distances.ToLog());
-            double average = distances.Average();
-            List<double> valuesBelowAverage = distances.Where(dist => dist < average).ToList();
-            List<double> valuesAboveAverage = distances.Where(dist => dist > average).ToList();
-            double shortDistance = valuesBelowAverage.Average();
-            double longDistance = valuesAboveAverage.Average();
-            //Log("Above: " + longDistanceToDecimalString() + " +- " + valuesAboveAverage.StandardDeviation().ToDecimalString() + ", " +
-            //    "Below: " + shortDistance.ToDecimalString() + " +- " + valuesBelowAverage.StandardDeviation().ToDecimalString());
-
-
-            // Assign pitch values to black keys
-
-            for (int index = 0; index < blackKeys.Count - 3; index++)
-            {
-                // These black key distances clearly identify the first Cis
-                if (blackKeys[index].DistanceToNext.IsAboutRel(shortDistance)
-                    && blackKeys[index + 1].DistanceToNext.IsAboutRel(longDistance)
-                    && blackKeys[index + 2].DistanceToNext.IsAboutRel(shortDistance)
-                    && blackKeys[index + 3].DistanceToNext.IsAboutRel(shortDistance))
-                {
-                    // Tone is C#
-                    blackKeys[index].Pitch = (Pitch)BlackPitch.Cis1;
-                    BlackPitch startTone = BlackPitch.Cis1;
-                    int startIndex = index;
-
-                    // Set lower tones
-                    index = startIndex;
-                    BlackPitch previousTone = startTone;
-                    while (index > 0)
+                    if (keyC1 == null
+                        || Math.Abs(currentKey.Point.X - xPositionC1) < Math.Abs(keyC1.Point.X - xPositionC1))
                     {
-                        previousTone = previousTone.Previous();
-                        blackKeys[--index].Pitch = (Pitch)previousTone;
+                        // C1 = nearest key
+                        keyC1 = currentKey;
                     }
-
-                    // Set higher tones
-                    index = startIndex;
-                    BlackPitch nextTone = startTone;
-                    while (index < blackKeys.Count - 1)
-                    {
-                        nextTone = nextTone.Next();
-                        blackKeys[++index].Pitch = (Pitch)nextTone;
-                    }
-
-                    break;
                 }
-            }
+                keyC1.Pitch = (Pitch)WhitePitch.C1;
 
+                bitmap.SetPixel4(keyC1.Point, ColorForTone(keyC1.Pitch));
 
-            // Colorize black keys
+                // Set white key pitches
 
-            foreach (PianoKey point in blackKeys)
-            {
-                bitmap.SetPixel4(point.Point, ColorForTone(point.Pitch));
-            }
+                // Tone is C#
+                WhitePitch startTone_ = WhitePitch.C1;
+                int startIndex_ = whiteKeys.IndexOf(keyC1);
 
-
-            // Find white key - C1
-            ///////////////////////
-
-            PianoKey KeyCis1 = blackKeys.Where(p => p.Pitch == Pitch.Cis1).First();
-            int xPositionC1 = (int)(KeyCis1.Point.X - 0.5 * keyDistance);
-
-            // Find white key nearest to C1
-
-            PianoKey keyC1 = null;
-            foreach (PianoKey currentKey in whiteKeys)
-            {
-                if (keyC1 == null
-                    || Math.Abs(currentKey.Point.X - xPositionC1) < Math.Abs(keyC1.Point.X - xPositionC1))
+                // Set lower tones
+                int index_ = startIndex_;
+                WhitePitch previousTone_ = startTone_;
+                while (index_ > 0)
                 {
-                    // C1 = nearest key
-                    keyC1 = currentKey;
+                    previousTone_ = previousTone_.Previous();
+                    whiteKeys[--index_].Pitch = (Pitch)previousTone_;
                 }
+
+                // Set higher tones
+                index_ = startIndex_;
+                WhitePitch nextTone_ = startTone_;
+                while (index_ < whiteKeys.Count - 1)
+                {
+                    nextTone_ = nextTone_.Next();
+                    whiteKeys[++index_].Pitch = (Pitch)nextTone_;
+                }
+
+                // Colorize white keys
+                foreach (PianoKey point in whiteKeys)
+                {
+                    bitmap.SetPixel4(point.Point, ColorForTone(point.Pitch));
+                }
+
+                // Set edited bitmap
+                Frame = bitmap.Bitmap.Copy();
+                return null;
+                //return whiteKeys.Concat(blackKeys).ToList();
             }
-            keyC1.Pitch = (Pitch)WhitePitch.C1;
-
-            bitmap.SetPixel4(keyC1.Point, ColorForTone(keyC1.Pitch));
-
-            // Set white key pitches
-
-            // Tone is C#
-            WhitePitch startTone_ = WhitePitch.C1;
-            int startIndex_ = whiteKeys.IndexOf(keyC1);
-
-            // Set lower tones
-            int index_ = startIndex_;
-            WhitePitch previousTone_ = startTone_;
-            while (index_ > 0)
-            {
-                previousTone_ = previousTone_.Previous();
-                whiteKeys[--index_].Pitch = (Pitch)previousTone_;
-            }
-
-            // Set higher tones
-            index_ = startIndex_;
-            WhitePitch nextTone_ = startTone_;
-            while (index_ < whiteKeys.Count - 1)
-            {
-                nextTone_ = nextTone_.Next();
-                whiteKeys[++index_].Pitch = (Pitch)nextTone_;
-            }
-
-            // Colorize white keys
-            foreach (PianoKey point in whiteKeys)
-            {
-                bitmap.SetPixel4(point.Point, ColorForTone(point.Pitch));
-            }
-
-            // Set edited bitmap
-            Frame = bitmap.Bitmap.Copy();
-            bitmap.Dispose();
-
-            return whiteKeys.Concat(blackKeys).ToList();
         }
 
         private void Log(object text)
@@ -829,185 +827,7 @@ namespace CreateSheetsFromVideo
         }
     }
 
-    public enum Pitch
-    {
-        C,
-        Cis,
-        D,
-        Es,
-        E,
-        F,
-        Fis,
-        G,
-        Gis,
-        A,
-        Bes,
-        B,
-        C1,
-        Cis1,
-        D1,
-        Es1,
-        E1,
-        F1,
-        Fis1,
-        G1,
-        Gis1,
-        A1,
-        Bes1,
-        B1,
-        C2,
-        Cis2,
-        D2,
-        Es2,
-        E2,
-        F2,
-        Fis2,
-        G2,
-        Gis2,
-        A2,
-        Bes2,
-        B2,
-        C3,
-        Cis3,
-        D3,
-        Es3,
-        E3,
-        F3,
-        Fis3,
-        G3,
-        Gis3,
-        A3,
-        Bes3,
-        B3,
-        C4,
-        Cis4,
-        D4,
-        Es4,
-        E4,
-        F4,
-        Fis4,
-        G4,
-        Gis4,
-        A4,
-        Bes4,
-        B4,
-        C5,
-        Cis5,
-        D5,
-        Es5,
-        E5,
-        F5,
-        Fis5,
-        G5,
-        Gis5,
-        A5,
-        Bes5,
-        B5,
-        C6,
-        Cis6,
-        D6,
-        Es6,
-        E6,
-        F6,
-        Fis6,
-        G6,
-        Gis6,
-        A6,
-        Bes6,
-        B6,
-    }
-
-    public enum WhitePitch
-    {
-        C = Pitch.C,
-        D = Pitch.D,
-        E = Pitch.E,
-        F = Pitch.F,
-        G = Pitch.G,
-        A = Pitch.A,
-        B = Pitch.B,
-        C1 = Pitch.C1,
-        D1 = Pitch.D1,
-        E1 = Pitch.E1,
-        F1 = Pitch.F1,
-        G1 = Pitch.G1,
-        A1 = Pitch.A1,
-        B1 = Pitch.B1,
-        C2 = Pitch.C2,
-        D2 = Pitch.D2,
-        E2 = Pitch.E2,
-        F2 = Pitch.F2,
-        G2 = Pitch.G2,
-        A2 = Pitch.A2,
-        B2 = Pitch.B2,
-        C3 = Pitch.C3,
-        D3 = Pitch.D3,
-        E3 = Pitch.E3,
-        F3 = Pitch.F3,
-        G3 = Pitch.G3,
-        A3 = Pitch.A3,
-        B3 = Pitch.B3,
-        C4 = Pitch.C4,
-        D4 = Pitch.D4,
-        E4 = Pitch.E4,
-        F4 = Pitch.F4,
-        G4 = Pitch.G4,
-        A4 = Pitch.A4,
-        B4 = Pitch.B4,
-        C5 = Pitch.C5,
-        D5 = Pitch.D5,
-        E5 = Pitch.E5,
-        F5 = Pitch.F5,
-        G5 = Pitch.G5,
-        A5 = Pitch.A5,
-        B5 = Pitch.B5,
-        C6 = Pitch.C6,
-        D6 = Pitch.D6,
-        E6 = Pitch.E6,
-        F6 = Pitch.F6,
-        G6 = Pitch.G6,
-        A6 = Pitch.A6,
-        B6 = Pitch.B6,
-    }
-
-    public enum BlackPitch
-    {
-        Cis = Pitch.Cis,
-        Es = Pitch.Es,
-        Fis = Pitch.Fis,
-        Gis = Pitch.Gis,
-        Bes = Pitch.Bes,
-        Cis1 = Pitch.Cis1,
-        Es1 = Pitch.Es1,
-        Fis1 = Pitch.Fis1,
-        Gis1 = Pitch.Gis1,
-        Bes1 = Pitch.Bes1,
-        Cis2 = Pitch.Cis2,
-        Es2 = Pitch.Es2,
-        Fis2 = Pitch.Fis2,
-        Gis2 = Pitch.Gis2,
-        Bes2 = Pitch.Bes2,
-        Cis3 = Pitch.Cis3,
-        Es3 = Pitch.Es3,
-        Fis3 = Pitch.Fis3,
-        Gis3 = Pitch.Gis3,
-        Bes3 = Pitch.Bes3,
-        Cis4 = Pitch.Cis4,
-        Es4 = Pitch.Es4,
-        Fis4 = Pitch.Fis4,
-        Gis4 = Pitch.Gis4,
-        Bes4 = Pitch.Bes4,
-        Cis5 = Pitch.Cis5,
-        Es5 = Pitch.Es5,
-        Fis5 = Pitch.Fis5,
-        Gis5 = Pitch.Gis5,
-        Bes5 = Pitch.Bes5,
-        Cis6 = Pitch.Cis6,
-        Es6 = Pitch.Es6,
-        Fis6 = Pitch.Fis6,
-        Gis6 = Pitch.Gis6,
-        Bes6 = Pitch.Bes6,
-    }
+  
 
     /// <summary>
     ///   Represents a horizontal line with all light and dark keyboard keys and mathematical stuff
@@ -1015,24 +835,53 @@ namespace CreateSheetsFromVideo
     public class LineWithStatistics
     {
         public int Y { private set; get; }
-        public List<int> BrightPixels { private set; get; }
-        public List<int> DarkPixels { private set; get; }
+        public List<int> WhiteKeyDistances { private set; get; }
+        public List<int> DarkKeyDistances { private set; get; }
 
-        public double BrightDeviation { private set; get; }
+        public double MeanBrightness { private set; get; }
+
+        public double WhiteKeyStdDeviation { private set; get; }
         public double DarkDeviation { private set; get; }
-        public double BrightMean { private set; get; }
-        public double DarkMean { private set; get; }
+        public double WhiteKeyDistanceMean { private set; get; }
+        public double DarkKeyDistanceMean { private set; get; }
 
-        public LineWithStatistics(int y, List<int> brightPixels, List<int> darkPixels)
+        public List<int> WhiteKeyPositions { private set; get; } = new List<int>();
+        public List<int> DarkKeyPositions { private set; get; } = new List<int>();
+        public List<double> BrightnessValues { private set; get; }
+
+        public LineWithStatistics(int y, 
+            //List<int> whiteKeyDistances, List<int> blackKeyDistances, 
+            List<double> brightnessValues)
         {
             Y = y;
-            BrightPixels = brightPixels;
-            DarkPixels = darkPixels;
+            //WhiteKeyDistances = whiteKeyDistances;
+            //DarkKeyDistances = blackKeyDistances;
+            BrightnessValues = brightnessValues;
+            MeanBrightness = brightnessValues.Sum() / brightnessValues.Count;
 
-            BrightDeviation = BrightPixels.StandardDeviation();
-            DarkDeviation = DarkPixels.StandardDeviation();
-            BrightMean = (double)brightPixels.Sum() / brightPixels.Count;
-            DarkMean = (double)darkPixels.Sum() / darkPixels.Count;
+            //WhiteKeyStdDeviation = WhiteKeyDistances.StandardDeviation();
+            //DarkDeviation = DarkKeyDistances.StandardDeviation();
+            //WhiteKeyDistanceMean = (double)whiteKeyDistances.Sum() / whiteKeyDistances.Count;
+            //DarkKeyDistanceMean = (double)blackKeyDistances.Sum() / blackKeyDistances.Count;
+
+            //int keyPosition = 0;
+            //foreach (int whiteKeyDistance in whiteKeyDistances)
+            //{
+            //    keyPosition += whiteKeyDistance;
+            //    WhiteKeyPositions.Add(keyPosition);
+            //}
+
+            //keyPosition = 0;
+            //foreach (int whiteKeyDistance in whiteKeyDistances)
+            //{
+            //    keyPosition += whiteKeyDistance;
+            //    DarkKeyPositions.Add(keyPosition);
+            //}
+        }
+
+        public override string ToString()
+        {
+            return $"Y = {Y}, Brightness = {MeanBrightness.ToShortString()}, BrightDev = {WhiteKeyStdDeviation.ToShortString()}, DarkDev = {DarkDeviation.ToShortString()}";
         }
     }
 

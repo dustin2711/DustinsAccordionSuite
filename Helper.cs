@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace CreateSheetsFromVideo
 {
     public static class Helper
     {
-
         /// <summary>
         ///   E.g. Inputs 2.2 and 2.0 result in 0.1 (10%)
         /// </summary>
