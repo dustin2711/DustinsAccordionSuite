@@ -242,7 +242,7 @@ namespace CreateSheetsFromVideo
                 double meanPitch = 0;
                 foreach (Tone tone in toneList)
                 {
-                    meanPitch += (int)tone.Pitch;
+                    meanPitch += 12 * tone.Octave + (int)tone.Pitch;
                 }
                 meanPitch /= toneList.Count;
                 return meanPitch;
@@ -338,40 +338,40 @@ namespace CreateSheetsFromVideo
             throw new Exception("Could not get beat duration");
         }
 
-        public void AddNoteC(ScorePartwisePartMeasure measure)
-        {
-            measure.Note.Add(new Note()
-            {
-                Pitch = new MusicXmlSchema.Pitch()
-                {
-                    Step = Step.C,
-                    Alter = 0,
-                    Octave = "4" // 4 = Default
-                },
-                //Duration = 4, // Only needful for midi
-                Type = new NoteType() { Value = NoteTypeValue.Whole }
-            });
-        }
+        //public void AddNoteC(ScorePartwisePartMeasure measure)
+        //{
+        //    measure.Note.Add(new Note()
+        //    {
+        //        Pitch = new MusicXmlSchema.Pitch()
+        //        {
+        //            Step = Step.C,
+        //            Alter = 0,
+        //            Octave = "4" // 4 = Default
+        //        },
+        //        //Duration = 4, // Only needful for midi
+        //        Type = new NoteType() { Value = NoteTypeValue.Whole }
+        //    });
+        //}
 
-        private Note CreateNote(string octave, decimal duration, NoteTypeValue value, Step step, decimal alter)
-        {
-            return new Note()
-            {
-                Pitch = new MusicXmlSchema.Pitch()
-                {
-                    Step = step,
-                    Alter = alter,
-                    AlterSpecified = true,
-                    Octave = octave.ToString() // 4 is default
-                },
-                Duration = duration, // Only needful for midi
-                Type = new NoteType()
-                {
-                    Value = value
-                },
-                Stem = new Stem() { Value = StemValue.Up },
-            };
-        }
+        //private Note CreateNote(string octave, decimal duration, NoteTypeValue value, Step step, decimal alter)
+        //{
+        //    return new Note()
+        //    {
+        //        Pitch = new MusicXmlSchema.Pitch()
+        //        {
+        //            Step = step,
+        //            Alter = alter,
+        //            AlterSpecified = true,
+        //            Octave = octave.ToString() // 4 is default
+        //        },
+        //        Duration = duration, // Only needful for midi
+        //        Type = new NoteType()
+        //        {
+        //            Value = value
+        //        },
+        //        Stem = new Stem() { Value = StemValue.Up },
+        //    };
+        //}
 
         private Note CreateRest(double duration)
         {
@@ -385,7 +385,7 @@ namespace CreateSheetsFromVideo
         private Note NoteFromTone(Tone tone) 
         {
             int alter = 0;
-            int octave = OctaveOffset;
+            int octave = OctaveOffset + tone.Octave;
 
             string pitchString = tone.Pitch.ToString();
 
@@ -403,13 +403,6 @@ namespace CreateSheetsFromVideo
             else if (pitchString.Contains("es"))
             {
                 alter = -1;
-            }
-
-            // Find out octave
-            char number = tone.Pitch.ToString().Where(char.IsDigit).FirstOrDefault();
-            if (number != default)
-            {
-                octave = int.Parse(number.ToString()) + OctaveOffset;
             }
 
             // Find out duration ("NoteTypeValue")
@@ -469,7 +462,8 @@ namespace CreateSheetsFromVideo
                 {
                     Value = noteTypeValue.Value
                 },
-                Stem = new Stem() { Value = tone.Pitch > Pitch.C3 ? StemValue.Down : StemValue.Up },
+                // ToDo: Stem > C3 not C
+                Stem = new Stem() { Value = tone.Pitch > Pitch.C ? StemValue.Down : StemValue.Up },
             };
 
             if (tone.ChordTones.Count > 0)

@@ -19,7 +19,7 @@ namespace CreateSheetsFromVideo
     {
         public Hand Hand = Hand.Undefined;
 
-        public Pitch Pitch { get; set; }
+        public ToneHeight ToneHeight { get; set; }
 
         public double StartTime { get; set; }
 
@@ -35,11 +35,9 @@ namespace CreateSheetsFromVideo
         public bool IsPartOfAnotherChord { get; set; } = false;
         public double EndTime { get; set; }
 
-        //public double TimeToBeatEnd => BeatEndTime - StartTime;
-        //public bool IsLastInBeat { get; set; }
-        //public double BeatEndTime { get; set; } = -1;
+        public Pitch Pitch => ToneHeight.Pitch;
 
-
+        public int Octave => ToneHeight.Octave;
 
         [XmlElement("Color")]
         public string ColorHtml
@@ -65,7 +63,7 @@ namespace CreateSheetsFromVideo
         private Tone(Tone other)
         {
             Hand = other.Hand;
-            Pitch = other.Pitch;
+            ToneHeight = other.ToneHeight;
             StartTime = other.StartTime;
             EndTime = other.EndTime;
             Color = other.Color;
@@ -73,18 +71,9 @@ namespace CreateSheetsFromVideo
             IsPartOfAnotherChord = other.IsPartOfAnotherChord;
         }
 
-        /// <summary>
-        ///  For debugging
-        /// </summary>
-        public Tone(Pitch pitch, Color color)
+        public Tone(ToneHeight toneHeight, Color color, double startTime)
         {
-            Pitch = pitch;
-            Color = color;
-        }
-
-        public Tone(Pitch pitch, Color color, double startTime)
-        {
-            Pitch = pitch;
+            ToneHeight = toneHeight;
             Color = color;
             StartTime = startTime;
         }

@@ -65,6 +65,9 @@
             this.bindingNavigatorSeparator2 = new System.Windows.Forms.ToolStripSeparator();
             this.mediaPlayer = new AxWMPLib.AxWindowsMediaPlayer();
             this.pictureBoxNotes = new System.Windows.Forms.PictureBox();
+            this.labelActiveTones = new System.Windows.Forms.Label();
+            this.labelPastTones = new System.Windows.Forms.Label();
+            this.labelLog = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.bindingNavigator1)).BeginInit();
             this.bindingNavigator1.SuspendLayout();
@@ -102,7 +105,7 @@
             // 
             // textBoxLog
             // 
-            this.textBoxLog.Location = new System.Drawing.Point(966, 385);
+            this.textBoxLog.Location = new System.Drawing.Point(964, 356);
             this.textBoxLog.Multiline = true;
             this.textBoxLog.Name = "textBoxLog";
             this.textBoxLog.Size = new System.Drawing.Size(301, 177);
@@ -114,16 +117,16 @@
             this.textBoxTonesActiveLeft.Margin = new System.Windows.Forms.Padding(2);
             this.textBoxTonesActiveLeft.Multiline = true;
             this.textBoxTonesActiveLeft.Name = "textBoxTonesActiveLeft";
-            this.textBoxTonesActiveLeft.Size = new System.Drawing.Size(145, 142);
+            this.textBoxTonesActiveLeft.Size = new System.Drawing.Size(145, 91);
             this.textBoxTonesActiveLeft.TabIndex = 6;
             // 
             // textBoxTonesPastLeft
             // 
-            this.textBoxTonesPastLeft.Location = new System.Drawing.Point(965, 202);
+            this.textBoxTonesPastLeft.Location = new System.Drawing.Point(964, 144);
             this.textBoxTonesPastLeft.Margin = new System.Windows.Forms.Padding(2);
             this.textBoxTonesPastLeft.Multiline = true;
             this.textBoxTonesPastLeft.Name = "textBoxTonesPastLeft";
-            this.textBoxTonesPastLeft.Size = new System.Drawing.Size(145, 178);
+            this.textBoxTonesPastLeft.Size = new System.Drawing.Size(145, 191);
             this.textBoxTonesPastLeft.TabIndex = 7;
             // 
             // buttonReset
@@ -146,9 +149,9 @@
             // 
             // buttonClearNotesPast
             // 
-            this.buttonClearNotesPast.Location = new System.Drawing.Point(1074, 174);
+            this.buttonClearNotesPast.Location = new System.Drawing.Point(964, 539);
             this.buttonClearNotesPast.Name = "buttonClearNotesPast";
-            this.buttonClearNotesPast.Size = new System.Drawing.Size(82, 23);
+            this.buttonClearNotesPast.Size = new System.Drawing.Size(301, 23);
             this.buttonClearNotesPast.TabIndex = 10;
             this.buttonClearNotesPast.Text = "Clear";
             this.buttonClearNotesPast.UseVisualStyleBackColor = true;
@@ -171,16 +174,16 @@
             this.textBoxTonesRightActive.Margin = new System.Windows.Forms.Padding(2);
             this.textBoxTonesRightActive.Multiline = true;
             this.textBoxTonesRightActive.Name = "textBoxTonesRightActive";
-            this.textBoxTonesRightActive.Size = new System.Drawing.Size(145, 142);
+            this.textBoxTonesRightActive.Size = new System.Drawing.Size(145, 91);
             this.textBoxTonesRightActive.TabIndex = 12;
             // 
             // textBoxTonesRight
             // 
-            this.textBoxTonesRight.Location = new System.Drawing.Point(1122, 202);
+            this.textBoxTonesRight.Location = new System.Drawing.Point(1122, 144);
             this.textBoxTonesRight.Margin = new System.Windows.Forms.Padding(2);
             this.textBoxTonesRight.Multiline = true;
             this.textBoxTonesRight.Name = "textBoxTonesRight";
-            this.textBoxTonesRight.Size = new System.Drawing.Size(145, 178);
+            this.textBoxTonesRight.Size = new System.Drawing.Size(145, 191);
             this.textBoxTonesRight.TabIndex = 13;
             // 
             // checkBoxShowVisuals
@@ -395,11 +398,41 @@
             this.pictureBoxNotes.TabIndex = 25;
             this.pictureBoxNotes.TabStop = false;
             // 
+            // labelActiveTones
+            // 
+            this.labelActiveTones.AutoSize = true;
+            this.labelActiveTones.Location = new System.Drawing.Point(1081, 7);
+            this.labelActiveTones.Name = "labelActiveTones";
+            this.labelActiveTones.Size = new System.Drawing.Size(66, 13);
+            this.labelActiveTones.TabIndex = 26;
+            this.labelActiveTones.Text = "Active tones";
+            // 
+            // labelPastTones
+            // 
+            this.labelPastTones.AutoSize = true;
+            this.labelPastTones.Location = new System.Drawing.Point(1090, 129);
+            this.labelPastTones.Name = "labelPastTones";
+            this.labelPastTones.Size = new System.Drawing.Size(57, 13);
+            this.labelPastTones.TabIndex = 27;
+            this.labelPastTones.Text = "Past tones";
+            // 
+            // labelLog
+            // 
+            this.labelLog.AutoSize = true;
+            this.labelLog.Location = new System.Drawing.Point(1104, 340);
+            this.labelLog.Name = "labelLog";
+            this.labelLog.Size = new System.Drawing.Size(25, 13);
+            this.labelLog.TabIndex = 28;
+            this.labelLog.Text = "Log";
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(2037, 786);
+            this.Controls.Add(this.labelLog);
+            this.Controls.Add(this.labelPastTones);
+            this.Controls.Add(this.labelActiveTones);
             this.Controls.Add(this.pictureBoxNotes);
             this.Controls.Add(this.bindingNavigator1);
             this.Controls.Add(this.buttonClearBeatTimes);
@@ -474,6 +507,9 @@
         private System.Windows.Forms.ToolStripSeparator bindingNavigatorSeparator2;
         private AxWMPLib.AxWindowsMediaPlayer mediaPlayer;
         private System.Windows.Forms.PictureBox pictureBoxNotes;
+        private System.Windows.Forms.Label labelActiveTones;
+        private System.Windows.Forms.Label labelPastTones;
+        private System.Windows.Forms.Label labelLog;
     }
 }
 

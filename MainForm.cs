@@ -20,6 +20,8 @@ using MediaToolkit;
 using MediaToolkit.Options;
 using YoutubeExtractor;
 using VideoLibrary;
+using WMPLib;
+using System.Runtime.ExceptionServices;
 
 namespace CreateSheetsFromVideo
 {
@@ -52,6 +54,7 @@ namespace CreateSheetsFromVideo
     ///   ToDo:
     ///   - Lange Note und währenddessen viele kleine
     ///   (- Rechts werden zu viele Noten angezeigt (3 obwohl 1 gespielt) ODER rechts/links vertauscht sich innerhalb des Stücks)
+    ///   - Warum wird Frame anzeigen immer langsamer? :o
     /// </summary>
     public partial class MainForm : Form
     {
@@ -63,68 +66,33 @@ namespace CreateSheetsFromVideo
         private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow 360.mp4";
 
         // Settings
-        private const ColorMode KeyColorMode = ColorMode.All;
+        private const ColorMode KeyColorMode = ColorMode.Green; //Blue = left, green = right
         private const AppMode Mode = AppMode.Save;
-        private const double StartTime = 4;
+        //private const double StartTime = 0;
+        private const double StartTime = 4.7;
         private const double EndTime = double.MaxValue;
         private const bool IsPlayingDefault = false;
         private const bool PlayRealtimeDefault = true;
         private const bool ShowVisualsDefault = true;
-        private const bool PrintOccuredTonesAgain = false;
+        private const bool PrintHandledTonesAgain = true;
 
         private bool isPlaying = IsPlayingDefault;
-        private long maximumPlayedFrameIndex;
-        private long frameIndex;
-        private VideoFileReader videoReader = new VideoFileReader();
+        private double maximumPlayedTime;
+        private long frameIndex = -1;
+        private bool Initializing { get; set; } = false;
+        private VideoFileReader frameViewer = new VideoFileReader();
         private Bitmap frame;
 
         private List<Tone> tonesActive = new List<Tone>();
         private List<Tone> tonesPast = new List<Tone>();
         private List<PianoKey> pianoKeys;
 
+        // For manual inserting beat beginnings
         private List<double> beatTimes = new List<double>();
 
-        //private void CreateFrames()
-        //{
-        //    // Accord.Video.FFMPEG
-        //    using (var vFReader = new VideoFileReader())
-        //    {
-        //        vFReader.Open("video.mp4");
-        //        for (int i = 0; i < vFReader.FrameCount; i++)
-        //        {
-        //            Bitmap bmpBaseOriginal = vFReader.ReadVideoFrame();
-        //        }
-        //        vFReader.Close();
-        //    }
-
-        //    // MediaToolkit
-        //    using (Engine engine = new Engine())
-        //    {
-        //        MediaFile videoFile = new MediaFile
-        //        {
-        //            Filename = VideoPath
-        //        };
-
-        //        engine.GetMetadata(videoFile);
-
-        //        var i = 0;
-        //        while (i < videoFile.Metadata.Duration.Seconds)
-        //        {
-        //            var options = new ConversionOptions
-        //            {
-        //                Seek = TimeSpan.FromSeconds(i)
-        //            };
-
-        //            var outputFile = new MediaFile
-        //            {
-        //                //Filename = string.Format("{0}\\image-{1}.jpeg", outputPath, i)
-        //            };
-
-        //            engine.GetThumbnail(videoFile, outputFile, options);
-        //            i++;
-        //        }
-        //    }
-        //}
+        // TimeChangedEvent
+        private delegate void TimeChangedEvent(double time);
+        private event TimeChangedEvent TimeChanged;
 
         public MainForm()
         {
@@ -132,11 +100,6 @@ namespace CreateSheetsFromVideo
 
             InitializeComponent();
             InitializeUI();
-
-            mediaPlayer.URL = VideoPath;
-            mediaPlayer.Ctlcontrols.currentPosition = StartTime;
-            mediaPlayer.Ctlcontrols.stop();
-            //mediaPlayer.Ctlcontrols.play();
 
             if (Mode == AppMode.Load)
             {
@@ -152,68 +115,61 @@ namespace CreateSheetsFromVideo
                 Load += (s, e) => Close();
                 return;
             }
-
-            Shown += (s, e) =>
+            else
             {
-                LoadVideo(VideoPath);
-
-                // Video play thread
-                new Thread(() =>
+                Shown += (s, e) =>
                 {
-                    while (frameIndex < videoReader.FrameCount)
+                    InitVideoPlayerAndFrameViewer(VideoPath);
+
+                    // Video play thread
+                    TimeChanged += SetFrameByTime;
+                    new Thread(() =>
                     {
-                        var watch = new System.Diagnostics.Stopwatch();
-                        watch.Start();
-                        //while (watch.El)
-                        Thread.Sleep(1000000);
-                        //double mediaPlayerTime = 0;
-                        //while (mediaPlayerTime < CurrentTime)
-                        //{
-                        //    try
-                        //    {
-                        //        mediaPlayerTime = mediaPlayer.Ctlcontrols.currentPosition;
-                        //    }
-                        //    catch { }
-                        //    Thread.Sleep(1);
-                        //}
+                        while (frameIndex < frameViewer.FrameCount
+                            && CurrentTime < EndTime)
+                        {
+                            try
+                            {
+                                CurrentTime = mediaPlayer.Ctlcontrols.currentPosition;
+                                TimeChanged?.Invoke(CurrentTime);
+                            }
+                            catch { }
+                            Thread.Sleep(1);
+                        }
 
-                        this.InvokeIfRequired(()
-                            => PlayNextFrame());
-                    }
-                }).Start();
+                        // EVALUATE
+                        Evaluate();
+                    }).Start();
 
-                RefreshUI();
-            };
+                    RefreshUI();
+                };
+            }
         }
 
-        void SaveYoutubeVideo(string link)
+        private void SaveYoutubeVideo(string link)
         {
             YouTube youTube = YouTube.Default; // starting point for YouTube actions
             YouTubeVideo video = youTube.GetVideo(link); // gets a Video object with info about the video
             File.WriteAllBytes(@"C:\Users\Dustin\Desktop\" + video.FullName, video.GetBytes());
         }
 
-        private void PlayFrame()
-        {
-            int frameIndex = (int)(mediaPlayer.Ctlcontrols.currentPosition / VideoDuration * FrameCount);
-            Frame = videoReader.ReadVideoFrame(frameIndex);
-            mediaPlayer.Ctlcontrols.currentPosition = CurrentTime;
-        }
-
         private bool ShowVisuals => checkBoxShowVisuals.Checked;
         private int FrameWidth => Frame.Width;
         private int FrameHeight => Frame.Height;
-        private double FrameRate => videoReader.FrameRate.Value;
-        private double FrameLength => 1.0 / videoReader.FrameRate.Value;
-        private long FrameCount => videoReader.FrameCount;
-        private double VideoDuration => videoReader.FrameCount / videoReader.FrameRate.Value;
-        private double CurrentTime => frameIndex * FrameLength;
+        private double FrameRate => frameViewer.FrameRate.Value;
+        private double FrameDuration => 1.0 / frameViewer.FrameRate.Value;
+        private long FrameCount => frameViewer.FrameCount;
+        private double VideoDuration => frameViewer.FrameCount / frameViewer.FrameRate.Value;
+        private double CurrentFrameViewerTime => frameIndex * FrameDuration;
+        private double CurrentTime;
+        IWMPControls2 Controls2 => (IWMPControls2)(mediaPlayer.Ctlcontrols);
 
         private Bitmap Frame
         {
             get => frame;
             set
             {
+                frame?.Dispose();
                 frame = value;
                 if (checkBoxShowVisuals.Checked)
                 {
@@ -230,8 +186,8 @@ namespace CreateSheetsFromVideo
 
             buttonReset.Click += (s, e) => ResetToProgramStart();
             buttonPlay.Click += (s, e) => PlayPause();
-            buttonNextFrame.Click += (s, e) => PlayNextFrame();
-            buttonPreviousFrame.Click += (s, e) => PlayPreviousFrame();
+            buttonNextFrame.Click += (s, e) => PlayNextFrameMediaPlayer();
+            buttonPreviousFrame.Click += (s, e) => PlayPreviousFrameMediaPlayer();
             buttonClearNotesPast.Click += (s, e) => ClearNotesPast();
             buttonClearNotesActive.Click += (s, e) => textBoxTonesActiveLeft.Clear();
             textBoxJumpTo.KeyDown += TextBoxJumpTo_KeyDown;
@@ -240,32 +196,82 @@ namespace CreateSheetsFromVideo
             KeyDown += MainForm_KeyDown;
         }
 
+        private void ResetToProgramStart()
+        {
+            InitVideoPlayerAndFrameViewer(VideoPath);
+
+            tonesActive.Clear();
+            tonesPast.Clear();
+            ClearBeatTimes();
+
+            textBoxLog.Clear();
+            textBoxTonesPastLeft.Clear();
+            textBoxTonesActiveLeft.Clear();
+            textBoxTonesRight.Clear();
+            textBoxTonesRightActive.Clear();
+
+            SetStartFrame();
+        }
+
+        private void InitVideoPlayerAndFrameViewer(string path)
+        {
+            // VideoPlayer
+            mediaPlayer.URL = VideoPath;
+            mediaPlayer.Ctlcontrols.currentPosition = StartTime;
+            mediaPlayer.settings.mute = true;
+            CurrentTime = StartTime;
+
+            // Stop playing (no frame shown at beginning)
+            //mediaPlayer.Ctlcontrols.stop();
+
+            // Immediately pause playing
+            new Thread(() =>
+            {
+                mediaPlayer.Ctlcontrols.play();
+                Thread.Sleep(100);
+                while (true)
+                {
+                    try
+                    {
+                        if (mediaPlayer.playState == WMPPlayState.wmppsPlaying)
+                        {
+                            mediaPlayer.Ctlcontrols.pause();
+                            break;
+                        }
+                    }
+                    catch { }
+                    Thread.Sleep(1);
+                }
+            }).Start();
+
+            // FrameViewer
+            frameViewer.Open(path);
+
+            //SetStartFrame();
+            isPlaying = false;
+            Initializing = true;
+
+            RefreshUI();
+        }
+
+        private void SetStartFrame()
+        {
+            // Get reset time from textbox (or use StartTime)
+            double resetTime = double.TryParse(textBoxResetTime.Text, out double textBoxTime) 
+                ? textBoxTime 
+                : StartTime;
+            SetFrameByTime(resetTime);
+        }
+
         private void TextBoxJumpTo_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
             {
                 if (double.TryParse(textBoxJumpTo.Text, out double time))
                 {
-                    frameIndex = (int)(time / FrameLength);
-                    UpdateFrameToFrameIndex();
+                    SetFrameByTime(time);
                 }
             }
-        }
-
-        private void ResetToProgramStart()
-        {
-            mediaPlayer.Ctlcontrols.currentPosition = StartTime;
-
-            tonesActive.Clear();
-            tonesPast.Clear();
-
-            textBoxTonesPastLeft.Clear();
-            textBoxTonesActiveLeft.Clear();
-            textBoxTonesRight.Clear();
-            textBoxTonesRightActive.Clear();
-
-            SetFrameIndexToStart();
-            PlayNextFrame();
         }
 
         private void ClearNotesPast()
@@ -288,14 +294,14 @@ namespace CreateSheetsFromVideo
                     PlayPause();
                     e.Handled = true;
                     break;
-                case Keys.Q:
-                    PlayPreviousFrame();
-                    e.Handled = true;
-                    break;
-                case Keys.W:
-                    PlayNextFrame();
-                    e.Handled = true;
-                    break;
+                //case Keys.Q:
+                //    PlayPreviousFrame();
+                //    e.Handled = true;
+                //    break;
+                //case Keys.W:
+                //    PlayNextFrame();
+                //    e.Handled = true;
+                //    break;
                 case Keys.B:
                     InsertBeat();
                     e.Handled = true;
@@ -319,24 +325,10 @@ namespace CreateSheetsFromVideo
         private void Evaluate()
         {
             SaveTones(TonesPath);
-            Close();
+            MessageBox.Show("Saved tones to " + TonesPath);
+            //Close();
         }
 
-        private void LoadVideo(string path)
-        {
-            videoReader.Open(path);
-            SetFrameIndexToStart();
-            UpdateFrameToFrameIndex();
-            pictureBox.Size = new Size(FrameWidth, FrameHeight);
-            pianoKeys = InitializePianoKeys();
-        }
-
-        private void SetFrameIndexToStart()
-        {
-            double resetTime = double.TryParse(textBoxResetTime.Text, out double time) ? time : StartTime;
-            frameIndex = (long)(resetTime / VideoDuration * FrameCount);
-            maximumPlayedFrameIndex = frameIndex;
-        }
 
         private void RefreshUI()
         {
@@ -347,10 +339,9 @@ namespace CreateSheetsFromVideo
             }
 
             // Set UI
-            Text = $"{CurrentTime.ToShortString()} / {(videoReader.FrameCount * FrameLength)} ({frameIndex})";
+            Text = $"{CurrentTime.ToShortString()} / {(frameViewer.FrameCount * FrameDuration)} ({frameIndex})";
             textBoxJumpTo.Text = CurrentTime.ToShortString();
             buttonPlay.Text = isPlaying ? "Pause" : "Play";
-            PlayPause(false);
         }
 
         private void SaveTones(string path)
@@ -391,60 +382,92 @@ namespace CreateSheetsFromVideo
             return TimeSpan.FromMilliseconds(milliseconds).ToString(@"mm\:ss\:fff");
         }
 
-        private void PlayPause(bool toggleIsPlaying = true)
+        private void PlayPause()
         {
-            if (toggleIsPlaying)
-            {
-                isPlaying = !isPlaying;
-            }
+            isPlaying = !isPlaying;
 
-            //if (isPlaying)
-            //{
-            //    mediaPlayer.Ctlcontrols.play();
-            //}
-            //else
-            //{
-            //    mediaPlayer.Ctlcontrols.pause();
-            //}
+            if (isPlaying)
+            {
+                mediaPlayer.Ctlcontrols.play();
+            }
+            else
+            {
+                 mediaPlayer.Ctlcontrols.pause();
+            }
         }
 
-        private void PlayPreviousFrame()
+        private void PlayPreviousFrameMediaPlayer()
         {
-            frameIndex = Math.Max(0, frameIndex - 1);
-            this.InvokeIfRequired(() => UpdateFrameToFrameIndex());
+            //mediaPlayer.Ctlcontrols.currentPosition -= FrameDuration;
+            //mediaPlayer.Ctlcontrols.pause();
+            Controls2.step(-1);
         }
 
-        private void PlayNextFrame()
+        private void PlayNextFrameMediaPlayer()
         {
-            // Increment
-            frameIndex = Math.Min(frameIndex + 1, videoReader.FrameCount);
+            //mediaPlayer.Ctlcontrols.currentPosition += FrameDuration;
+            //mediaPlayer.Ctlcontrols.pause();
+            Controls2.step(1);
+        }
 
-            // Evaluate at end
-            if (frameIndex >= videoReader.FrameCount - 1
-                || CurrentTime > EndTime)
+   
+
+        private void SetFrameByTime(double time)
+        {
+            long newFrameIndex = (long)(time / FrameDuration + 0.5);
+            long frameProgress = newFrameIndex - frameIndex; // Number of frames to go
+            if (Initializing || frameProgress != 0)
             {
-                isPlaying = false;
-                Evaluate();
-                return;
+                //Log("New Frame: " + newFrameIndex + " (" + time + "), init = " + Initializing);
+                frameIndex = newFrameIndex;
+
+                //Log("Frame = " + this.frameIndex + ", frameTime = " + (frameIndex * FrameDuration).ToShortString() + ", videoTime = " + CurrentTime.ToShortString());
+                Watch.Start();
+                Frame = frameViewer.ReadVideoFrame((int)newFrameIndex);
+                Watch.Measure(Log);
+
+                // Colorize recognized keys
+                if (Initializing)
+                {
+                    pianoKeys = InitializePianoKeys();
+                    Initializing = false;
+                }
+
+                if (!Initializing && frameProgress > 1)
+                {
+                    Log(@"WARNING: Skipped " + frameProgress + " frames");
+                    //MessageBox.Show("Skipping " + frameDelta + " frames");
+                }
+                else if (frameProgress == 1)
+                {
+                    AnalyseTones();
+                }
+
+                // Set taskbar progress
+                TaskbarManager.Instance.SetProgressState(TaskbarProgressBarState.Normal);
+                TaskbarManager.Instance.SetProgressValue((int)newFrameIndex, (int)FrameCount);
+
+                maximumPlayedTime = CurrentTime;
+
+                RefreshUI();
             }
+        }
 
-            // Show current frame
-            this.InvokeIfRequired(() 
-                => UpdateFrameToFrameIndex());
-
+        private void AnalyseTones()
+        {
             // COLLECT TONES
             /////////////////
 
-            if (frameIndex > maximumPlayedFrameIndex || PrintOccuredTonesAgain)
+            if (CurrentTime > maximumPlayedTime || PrintHandledTonesAgain)
             {
                 foreach (PianoKey key in pianoKeys)
                 {
                     Color color = Frame.GetPixel(key.Point.X, key.Point.Y);
                     float hue = color.GetHue();
-                    float sat = color.GetSaturation();
+                    float sat = color.GetSaturation(); // Active keys have saturation (colorized)
 
-
-                    if (!color.SimilarColorsAs(key.NotPressedColor, 100))
+                    int colorDelta = color.DeltaTo(key.NotPressedColor);
+                    if (colorDelta > 100)
                     {
                         // Only record tone if:
                         if (sat > 0.2 &&
@@ -452,10 +475,11 @@ namespace CreateSheetsFromVideo
                             || KeyColorMode == ColorMode.Blue && hue > 180
                             || KeyColorMode == ColorMode.Green && hue < 180))
                         {
-                            if (tonesActive.First(prev => prev.Pitch == key.Pitch, out Tone activeTone))
+                            if (tonesActive.TryGet(tone => tone.ToneHeight == key.ToneHeight, out Tone activeTone))
                             {
-                                //Log("Hold " + key.Pitch);
-                                // Key hold
+                                Log("Hold " + key.ToneHeight);
+
+                                // KEY HOLD
                                 if (ShowVisuals)
                                 {
                                     Frame.SetPixel4(key.Point.X, key.Point.Y, Color.Red);
@@ -464,13 +488,14 @@ namespace CreateSheetsFromVideo
                             }
                             else
                             {
-                                //Log("Pressed new " + key.Pitch);
-                                // Key pressed down
+                                Log("Pressed new " + key.ToneHeight);
+
+                                // KEY PRESSED DOWN
                                 if (ShowVisuals)
                                 {
                                     Frame.SetPixel16(key.Point.X, key.Point.Y, Color.Red);
                                 }
-                                Tone tone = new Tone(key.Pitch, color, CurrentTime)
+                                Tone tone = new Tone(key.ToneHeight, color, CurrentTime)
                                 {
                                     EndTime = CurrentTime
                                 };
@@ -480,25 +505,25 @@ namespace CreateSheetsFromVideo
                     }
                     else
                     {
-                        // Key released: If it was active, shift to tonesPast
-                        if (tonesActive.First(prev => prev.Pitch == key.Pitch, out Tone activeTone))
+                        // KEY RELEASED: If it was active, shift to tonesPast
+                        if (tonesActive.TryGet(prev => prev.ToneHeight == key.ToneHeight, out Tone activeTone))
                         {
-                            //Log("Released new " + key.Pitch);
+                            //Log("Released new " + key.ToneHeight);
                             activeTone.EndTime = CurrentTime;
                             tonesActive.Remove(activeTone);
                             tonesPast.Add(activeTone);
                         }
 
-                        // Add tone tone to bitmap
+                        // Add tone to bitmap
                         //pictureBoxNotes.Image
                     }
                 }
             }
 
             // Update tone textboxes
-            if (checkBoxShowVisuals.Checked)
+            if (ShowVisuals)
             {
-                this.InvokeIfRequired(() =>
+                this.Invoke(() =>
                 {
                     // Active tones
                     textBoxTonesActiveLeft.Clear();
@@ -519,23 +544,6 @@ namespace CreateSheetsFromVideo
                     }
                 });
             }
-
-            maximumPlayedFrameIndex = frameIndex;
-
-            RefreshUI();
-        }
-
-        private void UpdateFrameToFrameIndex()
-        {
-            Frame?.Dispose();
-
-            Watch.Start();
-            Frame = new Bitmap(videoReader.ReadVideoFrame((int)frameIndex), pictureBox.Width, pictureBox.Height);
-            Watch.Measure(Log);
-
-            // Set taskbar progress
-            TaskbarManager.Instance.SetProgressState(TaskbarProgressBarState.Normal);
-            TaskbarManager.Instance.SetProgressValue((int)frameIndex, (int)FrameCount);
 
             RefreshUI();
         }
@@ -614,7 +622,7 @@ namespace CreateSheetsFromVideo
                 //whiteKeyPoints.Add(new Point(xPos, brightnessLine.Y));
                 for (int i = 0; i < sectionsWidths.Count - 1; i += 2)
                 {
-                    bitmap.SetPixel4(xPos, brightnessLine.Y, Color.Brown);
+                    //bitmap.SetPixel4(xPos, brightnessLine.Y, Color.Brown);
                     whiteKeyPoints.Add(new Point(xPos, brightnessLine.Y));
                     xPos += sectionsWidths[i] + sectionsWidths[i + 1];
                 }
@@ -630,7 +638,7 @@ namespace CreateSheetsFromVideo
                     if (darkestLine.BrightnessValues[xPos - 1] < BrightnessOffset
                         && darkestLine.BrightnessValues[xPos + 1] < BrightnessOffset)
                     {
-                        bitmap.SetPixel4(xPos, darkestLine.Y, Color.Yellow);
+                        //bitmap.SetPixel4(xPos, darkestLine.Y, Color.Yellow);
                         blackKeyPoints.Add(new Point(xPos, darkestLine.Y));
                     }
                 }
@@ -664,9 +672,10 @@ namespace CreateSheetsFromVideo
                 //    "Below: " + shortDistance.ToDecimalString() + " +- " + valuesBelowAverage.StandardDeviation().ToDecimalString());
 
 
-                // Assign pitch values to black keys
+                // Assign ToneHeights to BLACK keys
+                ////////////////////////////////////
 
-                for (int index = 0; index < blackKeys.Count - 3; index++)
+                for (int index = 0; index < blackKeys.Count; index++)
                 {
                     // These black key distances clearly identify the first Cis
                     if (blackKeys[index].DistanceToNext.IsAboutRel(shortDistance)
@@ -675,26 +684,26 @@ namespace CreateSheetsFromVideo
                         && blackKeys[index + 3].DistanceToNext.IsAboutRel(shortDistance))
                     {
                         // Tone is C#
-                        blackKeys[index].Pitch = (Pitch)BlackPitch.Cis1;
-                        BlackPitch startTone = BlackPitch.Cis1;
+                        ToneHeight startToneHeight = new ToneHeight(Pitch.Cis, 2);
+                        blackKeys[index].ToneHeight = startToneHeight;
                         int startIndex = index;
 
-                        // Set lower tones
+                        // Set lower blackKeys' toneHeights
                         index = startIndex;
-                        BlackPitch previousTone = startTone;
+                        ToneHeight previousToneHeight = startToneHeight;
                         while (index > 0)
                         {
-                            previousTone = previousTone.Previous();
-                            blackKeys[--index].Pitch = (Pitch)previousTone;
+                            previousToneHeight = ToneHeight.GetPreviousBlack(previousToneHeight);
+                            blackKeys[--index].ToneHeight = previousToneHeight;
                         }
 
-                        // Set higher tones
+                        // Set higher blackKeys' toneHeights
                         index = startIndex;
-                        BlackPitch nextTone = startTone;
+                        ToneHeight nextTone = startToneHeight;
                         while (index < blackKeys.Count - 1)
                         {
-                            nextTone = nextTone.Next();
-                            blackKeys[++index].Pitch = (Pitch)nextTone;
+                            nextTone = ToneHeight.GetNextBlack(nextTone);
+                            blackKeys[++index].ToneHeight = nextTone;
                         }
 
                         break;
@@ -702,70 +711,73 @@ namespace CreateSheetsFromVideo
                 }
 
 
-                // Colorize black keys
-
-                foreach (PianoKey point in blackKeys)
-                {
-                    bitmap.SetPixel4(point.Point, ColorForTone(point.Pitch));
-                }
-
 
                 // Find white key - C1
                 ///////////////////////
 
-                PianoKey KeyCis1 = blackKeys.Where(p => p.Pitch == Pitch.Cis1).First();
-                int xPositionC1 = (int)(KeyCis1.Point.X - 0.5 * keyDistance);
+                PianoKey KeyCis2 = blackKeys.Where(p => p.ToneHeight.Pitch == Pitch.Cis && p.ToneHeight.Octave == 2).First();
+                int xPositionC1 = (int)(KeyCis2.Point.X - 0.5 * keyDistance);
 
                 // Find white key nearest to C1
-
-                PianoKey keyC1 = null;
+                PianoKey keyC2 = null;
                 foreach (PianoKey currentKey in whiteKeys)
                 {
-                    if (keyC1 == null
-                        || Math.Abs(currentKey.Point.X - xPositionC1) < Math.Abs(keyC1.Point.X - xPositionC1))
+                    if (keyC2 == null
+                        || Math.Abs(currentKey.Point.X - xPositionC1) < Math.Abs(keyC2.Point.X - xPositionC1))
                     {
                         // C1 = nearest key
-                        keyC1 = currentKey;
+                        keyC2 = currentKey;
                     }
                 }
-                keyC1.Pitch = (Pitch)WhitePitch.C1;
+                keyC2.ToneHeight = new ToneHeight(Pitch.C, 2);
 
-                bitmap.SetPixel4(keyC1.Point, ColorForTone(keyC1.Pitch));
+                bitmap.SetPixel4(keyC2.Point, ColorForTone(keyC2.ToneHeight.Pitch));
 
                 // Set white key pitches
+                FindWhiteKeys(whiteKeys, keyC2);
 
-                // Tone is C#
-                WhitePitch startTone_ = WhitePitch.C1;
-                int startIndex_ = whiteKeys.IndexOf(keyC1);
-
-                // Set lower tones
-                int index_ = startIndex_;
-                WhitePitch previousTone_ = startTone_;
-                while (index_ > 0)
+                // Colorize black keys
+                foreach (PianoKey point in blackKeys)
                 {
-                    previousTone_ = previousTone_.Previous();
-                    whiteKeys[--index_].Pitch = (Pitch)previousTone_;
+                    bitmap.SetPixel4(point.Point, ColorForPitchDict[point.ToneHeight.Pitch]);
                 }
-
-                // Set higher tones
-                index_ = startIndex_;
-                WhitePitch nextTone_ = startTone_;
-                while (index_ < whiteKeys.Count - 1)
-                {
-                    nextTone_ = nextTone_.Next();
-                    whiteKeys[++index_].Pitch = (Pitch)nextTone_;
-                }
-
                 // Colorize white keys
                 foreach (PianoKey point in whiteKeys)
                 {
-                    bitmap.SetPixel4(point.Point, ColorForTone(point.Pitch));
+                    bitmap.SetPixel4(point.Point, ColorForPitchDict[point.ToneHeight.Pitch]);
                 }
-
-                // Set edited bitmap
+                // Set bitmap
                 Frame = bitmap.Bitmap.Copy();
-                return null;
-                //return whiteKeys.Concat(blackKeys).ToList();
+
+                List<PianoKey> keys = whiteKeys.Concat(blackKeys).ToList();
+                bool anySameToneHeight = keys.GroupBy(x => x.ToneHeight.TotalHeight).Any(key => key.Count() > 1);
+                Log("Same tone heights = " + anySameToneHeight);
+                return keys;
+            }
+        }
+
+        private void FindWhiteKeys(List<PianoKey> whiteKeys, PianoKey keyC2)
+        {
+            // Tone is C#
+            ToneHeight startTone = keyC2.ToneHeight;
+            int startIndex = whiteKeys.IndexOf(keyC2);
+
+            // Set lower whiteKeys' toneHeights
+            int index = startIndex;
+            ToneHeight previousTone = startTone;
+            while (index > 0)
+            {
+                previousTone = ToneHeight.GetPreviousWhite(previousTone);
+                whiteKeys[--index].ToneHeight = previousTone;
+            }
+
+            // Set higher whiteKeys' toneHeights
+            index = startIndex;
+            ToneHeight nextTone = startTone;
+            while (index < whiteKeys.Count - 1)
+            {
+                nextTone = ToneHeight.GetNextWhite(nextTone);
+                whiteKeys[++index].ToneHeight = nextTone;
             }
         }
 
@@ -782,34 +794,46 @@ namespace CreateSheetsFromVideo
                 return;
             }
 
+            if (textBoxLog.TextLength > 500)
+            {
+                textBoxLog.Clear();
+            }
+
             textBoxLog.AppendText(DateTime.Now.ToString("hh:mm:ss") + ":  " + text.ToString());
         }
 
         public Color ColorForTone(Pitch pitch)
         {
             // Normalize
-            pitch = (Pitch)((int)pitch % ColorByPitch.Count);
+            pitch = (Pitch)((int)pitch % ColorForPitchDict.Count);
 
             //pitch = (Pitch)((int)pitch - ColorByPitch.Count);
 
-            return ColorByPitch[pitch];
+            return ColorForPitchDict[pitch];
         }
 
-        private static Dictionary<Pitch, Color> ColorByPitch = new Dictionary<Pitch, Color>()
+        private readonly static Dictionary<Pitch, Color> ColorForPitchDict = new Dictionary<Pitch, Color>()
         {
-            { Pitch.C, Color.DodgerBlue },
-            { Pitch.D, Color.DeepSkyBlue },
-            { Pitch.E, Color.DarkTurquoise },
-            { Pitch.F, Color.MediumAquamarine },
-            { Pitch.G, Color.MediumSeaGreen },
-            { Pitch.A, Color.LimeGreen },
-            { Pitch.B, Color.Lime },
-            { Pitch.Cis, Color.Yellow },
-            { Pitch.Es, Color.Gold },
+            // White keys
+            { Pitch.C, Color.Black },
+            { Pitch.D, Color.Gold },
+            { Pitch.E, Color.Orange },
+            { Pitch.F, Color.Red },
+            { Pitch.G, Color.Violet },
+            { Pitch.A, Color.SkyBlue },
+            { Pitch.B, Color.Green },
+            // Black keys
+            { Pitch.Cis, Color.White },
+            { Pitch.Es, Color.Yellow },
             { Pitch.Fis, Color.Orange },
-            { Pitch.Gis, Color.OrangeRed },
-            { Pitch.Bes, Color.Crimson },
+            { Pitch.Gis, Color.Red },
+            { Pitch.Bes, Color.Violet },
         };
+
+        private static Color CreateColorless(byte brightness)
+        {
+            return Color.FromArgb(brightness, brightness, brightness);
+        }
 
         private void ButtonNextFrame_Click(object sender, EventArgs e)
         {
@@ -827,7 +851,7 @@ namespace CreateSheetsFromVideo
         }
     }
 
-  
+
 
     /// <summary>
     ///   Represents a horizontal line with all light and dark keyboard keys and mathematical stuff
@@ -849,7 +873,7 @@ namespace CreateSheetsFromVideo
         public List<int> DarkKeyPositions { private set; get; } = new List<int>();
         public List<double> BrightnessValues { private set; get; }
 
-        public LineWithStatistics(int y, 
+        public LineWithStatistics(int y,
             //List<int> whiteKeyDistances, List<int> blackKeyDistances, 
             List<double> brightnessValues)
         {
@@ -882,25 +906,6 @@ namespace CreateSheetsFromVideo
         public override string ToString()
         {
             return $"Y = {Y}, Brightness = {MeanBrightness.ToShortString()}, BrightDev = {WhiteKeyStdDeviation.ToShortString()}, DarkDev = {DarkDeviation.ToShortString()}";
-        }
-    }
-
-    public class PianoKey
-    {
-        public Pitch Pitch { get; set; }
-        public Point Point { get; }
-        public double DistanceToNext { get; set; }
-        public Color NotPressedColor { get; }
-
-        public PianoKey(Point point, DirectBitmap bitmap)
-        {
-            Point = point;
-            NotPressedColor = bitmap.GetPixel(Point);
-        }
-
-        public override string ToString()
-        {
-            return $"({Point.X} | {Point.Y}): {Pitch}";
         }
     }
 }

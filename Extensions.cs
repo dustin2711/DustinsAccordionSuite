@@ -16,17 +16,17 @@ namespace CreateSheetsFromVideo
             return new string(text.Where(c => c < '0' || c > '9').ToArray());
         }
 
-        public static string ToShortString(this double value, string format = "0.00")
+        public static string ToShortString(this double value, string format = "0.000")
         {
             return value.ToString(format);
         }
 
-        public static string ToShortString(this float value, string format = "0.00")
+        public static string ToShortString(this float value, string format = "0.000")
         {
             return value.ToString(format);
         }
 
-        public static void InvokeIfRequired(this Control control, MethodInvoker action)
+        public static void Invoke(this Control control, MethodInvoker action)
         {
             int i = 0;
             while (!control.Visible)
@@ -107,11 +107,11 @@ namespace CreateSheetsFromVideo
         }
 
         /// <summary>
-        ///   Float = absolute delta, Double = relative delta
+        ///   Math.Abs(value - otherValue) <= absoluteDelta
         /// </summary>
         public static bool IsAboutAbs(this double value, double otherValue, double absoluteDelta)
         {
-            return Math.Abs(value - otherValue) < absoluteDelta;
+            return Math.Abs(value - otherValue) <= absoluteDelta;
         }
 
         public static bool SimilarColorsAs(this Color color, Color otherColor, int allowedDelta = 50)
@@ -122,6 +122,14 @@ namespace CreateSheetsFromVideo
                 + Math.Abs(color.B - otherColor.B)) < allowedDelta;
         }
 
+        public static int DeltaTo(this Color color, Color otherColor)
+        {
+            return
+                  Math.Abs(color.R - otherColor.R)
+                + Math.Abs(color.G - otherColor.G)
+                + Math.Abs(color.B - otherColor.B);
+        }
+
         /// <summary>
         ///   Equals "Enumerable.Contains(this)".
         /// </summary>
@@ -130,7 +138,7 @@ namespace CreateSheetsFromVideo
             return list.Contains(obj);
         }
 
-        public static bool First<T>(this IEnumerable<T> list, Func<T, bool> func, out T element)
+        public static bool TryGet<T>(this IEnumerable<T> list, Func<T, bool> func, out T element)
         {
             element = list.FirstOrDefault(func);
             return element != null;
