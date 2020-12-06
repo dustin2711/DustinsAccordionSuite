@@ -25,31 +25,6 @@ using System.Runtime.ExceptionServices;
 
 namespace CreateSheetsFromVideo
 {
-    enum AppMode
-    {
-        Save, // Play and SAVE
-        Load // LOAD and evaluate
-    }
-
-    /// <summary>
-    ///   Color of which tones shall be noted?
-    /// </summary>
-    enum ColorMode
-    {
-        /// <summary>
-        ///   Collect only hue < 180
-        /// </summary>
-        Green,
-        /// <summary>
-        ///   Collect only hue > 180
-        /// </summary>
-        Blue,
-        /// <summary>
-        ///   Color does not matter for collecting tones
-        /// </summary>
-        All
-    }
-
     /// <summary>
     ///   ToDo:
     ///   - Lange Note und währenddessen viele kleine
@@ -59,7 +34,7 @@ namespace CreateSheetsFromVideo
     public partial class MainForm : Form
     {
         // Serialize List<Tone> to file
-        private const string TonesPath = @"C:\Users\Dustin\Desktop\tones";
+        private const string SheetSavePath = @"C:\Users\Dustin\Desktop\SheetSave";
 
         // Video file
         //private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow.mp4";
@@ -67,13 +42,14 @@ namespace CreateSheetsFromVideo
 
         // Settings
         private const ColorMode KeyColorMode = ColorMode.Green; //Blue = left, green = right
-        private const AppMode Mode = AppMode.Save;
+        private const AppMode Mode = AppMode.Load;
         private const double StartTime = 5.0;
-        private const double EndTime = double.MaxValue;
+        private const double EndTime = 30;
         private const bool IsPlayingDefault = false;
         private const bool PlayRealtimeDefault = true;
         private const bool ShowVisualsDefault = true;
         private const bool PrintHandledTonesAgain = true;
+        private const bool Mute = false;
 
         private bool isPlaying = IsPlayingDefault;
         private double maximumPlayedTime;
@@ -89,16 +65,13 @@ namespace CreateSheetsFromVideo
         // For manual inserting beat beginnings
         private List<double> beatTimes = new List<double>();
 
-        // TimeChangedEvent
-        private delegate void TimeChangedEvent(double time);
-        private event TimeChangedEvent TimeChanged;
-
         public MainForm()
         {
             //SaveYoutubeVideo(@"https://www.youtube.com/watch?v=lPtl-gBpGG8");
 
             InitializeComponent();
             InitializeUI();
+            InitNoteImage();
 
             if (Mode == AppMode.Load)
             {
@@ -106,9 +79,9 @@ namespace CreateSheetsFromVideo
                 //SaveTones(tonesPath);
                 //var loaded = LoadTones(tonesPath);
 
-                tonesPast = LoadTones(TonesPath);
+                SheetSave save = LoadSheetSave(SheetSavePath);
 
-                SheetBuilder builder = new SheetBuilder(tonesPast, Path.GetFileNameWithoutExtension(VideoPath));
+                SheetBuilder builder = new SheetBuilder(save, Path.GetFileNameWithoutExtension(VideoPath));
                 builder.SaveAsFile(Path.ChangeExtension(VideoPath, ".musicxml"));
 
                 Load += (s, e) => Close();
@@ -184,7 +157,7 @@ namespace CreateSheetsFromVideo
             checkBoxShowVisuals.Checked = ShowVisualsDefault;
             textBoxResetTime.Text = StartTime.ToString();
 
-            buttonReset.Click += (s, e) => ResetToProgramStart();
+            buttonInit.Click += (s, e) => InitProgramm();
             buttonPlay.Click += (s, e) => PlayPause();
             buttonNextFrame.Click += (s, e) => PlayNextFrameMediaPlayer();
             buttonPreviousFrame.Click += (s, e) => PlayPreviousFrameMediaPlayer();
@@ -196,14 +169,18 @@ namespace CreateSheetsFromVideo
             KeyDown += MainForm_KeyDown;
         }
 
-        private void ResetToProgramStart()
+        private void InitProgramm()
         {
             InitVideoPlayerAndFrameViewer(VideoPath);
+            InitNoteImage();
 
+            // Clear lists
+            pianoKeys.Clear();
             tonesActive.Clear();
             tonesPast.Clear();
             ClearBeatTimes();
 
+            // Clear textboxes
             textBoxLog.Clear();
             textBoxTonesPastLeft.Clear();
             textBoxTonesActiveLeft.Clear();
@@ -218,7 +195,7 @@ namespace CreateSheetsFromVideo
             // VideoPlayer
             mediaPlayer.URL = VideoPath;
             mediaPlayer.Ctlcontrols.currentPosition = StartTime;
-            mediaPlayer.settings.mute = true;
+            mediaPlayer.settings.mute = Mute;
             CurrentTime = StartTime;
 
             // Stop playing (no frame shown at beginning)
@@ -317,6 +294,7 @@ namespace CreateSheetsFromVideo
             {
                 textBoxBeatTimes.AppendText(beatTime.ToShortString() + Environment.NewLine);
             }
+            DrawBeatDash();
         }
 
         /// <summary>
@@ -324,8 +302,8 @@ namespace CreateSheetsFromVideo
         /// </summary>
         private void Evaluate()
         {
-            SaveTones(TonesPath);
-            MessageBox.Show("Saved tones to " + TonesPath);
+            SaveSheets(SheetSavePath);
+            MessageBox.Show("Saved tones to " + SheetSavePath);
             //Close();
         }
 
@@ -344,20 +322,20 @@ namespace CreateSheetsFromVideo
             buttonPlay.Text = isPlaying ? "Pause" : "Play";
         }
 
-        private void SaveTones(string path)
+        private void SaveSheets(string path)
         {
             File.WriteAllText(path, "");
             using (FileStream stream = new FileStream(path, FileMode.OpenOrCreate))
             {
-                new XmlSerializer(typeof(List<Tone>)).Serialize(stream, tonesPast);
+                new XmlSerializer(typeof(SheetSave)).Serialize(stream, new SheetSave(tonesPast, beatTimes));
             }
         }
 
-        private List<Tone> LoadTones(string path)
+        private SheetSave LoadSheetSave(string path)
         {
             using (FileStream stream = new FileStream(path, FileMode.OpenOrCreate))
             {
-                return new XmlSerializer(typeof(List<Tone>)).Deserialize(stream) as List<Tone>;
+                return new XmlSerializer(typeof(SheetSave)).Deserialize(stream) as SheetSave;
             }
         }
 
@@ -452,6 +430,8 @@ namespace CreateSheetsFromVideo
             // COLLECT TONES
             /////////////////
 
+            bool needToInvalidate = false;
+
             if (CurrentTime > maximumPlayedTime 
                 || PrintHandledTonesAgain)
             {
@@ -472,7 +452,7 @@ namespace CreateSheetsFromVideo
                         {
                             if (tonesActive.TryGet(tone => tone.ToneHeight == key.ToneHeight, out Tone activeTone))
                             {
-                                Log("Hold " + key.ToneHeight);
+                                //Log("Hold " + key.ToneHeight);
 
                                 // KEY HOLD
                                 if (ShowVisuals)
@@ -483,7 +463,7 @@ namespace CreateSheetsFromVideo
                             }
                             else
                             {
-                                Log("Pressed new " + key.ToneHeight);
+                                //Log("Pressed new " + key.ToneHeight);
 
                                 // KEY PRESSED DOWN
                                 if (ShowVisuals)
@@ -507,12 +487,18 @@ namespace CreateSheetsFromVideo
                             activeTone.EndTime = CurrentTime;
                             tonesActive.Remove(activeTone);
                             tonesPast.Add(activeTone);
-                        }
 
-                        // Add tone to bitmap
-                        //pictureBoxNotes.Image
+                            // Draw tone
+                            DrawTone(activeTone);
+                            needToInvalidate = true;
+                        }
                     }
                 }
+            }
+
+            if (needToInvalidate)
+            {
+                pictureBoxNotes.Invalidate();
             }
 
             // Update tone textboxes
@@ -542,6 +528,9 @@ namespace CreateSheetsFromVideo
 
             RefreshUI();
         }
+
+
+   
 
         private List<PianoKey> InitializePianoKeys()
         {
@@ -609,7 +598,6 @@ namespace CreateSheetsFromVideo
                 }
                 double keyDistance = list1.Sum() / list1.Count + list2.Sum() / list2.Count;
 
-
                 // Set white key points
                 List<Point> whiteKeyPoints = new List<Point>();
 
@@ -643,8 +631,6 @@ namespace CreateSheetsFromVideo
                     throw new Exception("Could not find keys.");
                 }
 
-
-
                 // Create white & black keye
 
                 List<PianoKey> blackKeys = blackKeyPoints.Select(point => new PianoKey(point, bitmap)).ToList();
@@ -657,7 +643,7 @@ namespace CreateSheetsFromVideo
                     blackKeys[index].DistanceToNext = blackKeys[index + 1].Point.X - blackKeys[index].Point.X;
                 }
                 var distances = blackKeys.Select(point => point.DistanceToNext).Where(dist => dist != 0).ToList();
-                Log("Distances = " + distances.ToLog());
+                //Log("Distances = " + distances.ToLog());
                 double average = distances.Average();
                 List<double> valuesBelowAverage = distances.Where(dist => dist < average).ToList();
                 List<double> valuesAboveAverage = distances.Where(dist => dist > average).ToList();
@@ -668,8 +654,6 @@ namespace CreateSheetsFromVideo
 
 
                 // Assign ToneHeights to BLACK keys
-                ////////////////////////////////////
-
                 for (int index = 0; index < blackKeys.Count; index++)
                 {
                     // These black key distances clearly identify the first Cis
@@ -678,58 +662,29 @@ namespace CreateSheetsFromVideo
                         && blackKeys[index + 2].DistanceToNext.IsAboutRel(shortDistance)
                         && blackKeys[index + 3].DistanceToNext.IsAboutRel(shortDistance))
                     {
-                        // Tone is C#
-                        ToneHeight startToneHeight = new ToneHeight(Pitch.Cis, 2);
-                        blackKeys[index].ToneHeight = startToneHeight;
-                        int startIndex = index;
-
-                        // Set lower blackKeys' toneHeights
-                        index = startIndex;
-                        ToneHeight previousToneHeight = startToneHeight;
-                        while (index > 0)
-                        {
-                            previousToneHeight = ToneHeight.GetPreviousBlack(previousToneHeight);
-                            blackKeys[--index].ToneHeight = previousToneHeight;
-                        }
-
-                        // Set higher blackKeys' toneHeights
-                        index = startIndex;
-                        ToneHeight nextTone = startToneHeight;
-                        while (index < blackKeys.Count - 1)
-                        {
-                            nextTone = ToneHeight.GetNextBlack(nextTone);
-                            blackKeys[++index].ToneHeight = nextTone;
-                        }
-
+                        // Set ToneHeights of black keys
+                        SetBlackKeyToneHeights(blackKeys, index);
                         break;
                     }
                 }
 
-
-
-                // Find white key - C1
-                ///////////////////////
-
+                // Assign ToneHeights to WHITE keys
+                // Find white key - C2
                 PianoKey KeyCis2 = blackKeys.Where(p => p.ToneHeight.Pitch == Pitch.Cis && p.ToneHeight.Octave == 2).First();
-                int xPositionC1 = (int)(KeyCis2.Point.X - 0.5 * keyDistance);
-
-                // Find white key nearest to C1
-                PianoKey keyC2 = null;
+                int xPositionC2 = (int)(KeyCis2.Point.X - 0.5 * keyDistance);
+                // Find nearest white key to C2
+                PianoKey nearestKeyToC2 = null;
                 foreach (PianoKey currentKey in whiteKeys)
                 {
-                    if (keyC2 == null
-                        || Math.Abs(currentKey.Point.X - xPositionC1) < Math.Abs(keyC2.Point.X - xPositionC1))
+                    if (nearestKeyToC2 == null
+                        || Math.Abs(currentKey.Point.X - xPositionC2) < Math.Abs(nearestKeyToC2.Point.X - xPositionC2))
                     {
-                        // C1 = nearest key
-                        keyC2 = currentKey;
+                        nearestKeyToC2 = currentKey;
                     }
                 }
-                keyC2.ToneHeight = new ToneHeight(Pitch.C, 2);
-
-                bitmap.SetPixel4(keyC2.Point, ColorForTone(keyC2.ToneHeight.Pitch));
-
-                // Set white key pitches
-                FindWhiteKeys(whiteKeys, keyC2);
+                nearestKeyToC2.ToneHeight = new ToneHeight(Pitch.C, 2);
+                // Set ToneHeights of white keys
+                SetWhiteKeyToneHeights(whiteKeys, nearestKeyToC2);
 
                 // Colorize black keys
                 foreach (PianoKey point in blackKeys)
@@ -745,13 +700,39 @@ namespace CreateSheetsFromVideo
                 Frame = bitmap.Bitmap.Copy();
 
                 List<PianoKey> keys = whiteKeys.Concat(blackKeys).ToList();
-                bool anySameToneHeight = keys.GroupBy(x => x.ToneHeight.TotalHeight).Any(key => key.Count() > 1);
+                bool anySameToneHeight = keys.GroupBy(x => x.ToneHeight.TotalValue).Any(key => key.Count() > 1);
                 Log("Same tone heights = " + anySameToneHeight);
                 return keys;
             }
         }
 
-        private void FindWhiteKeys(List<PianoKey> whiteKeys, PianoKey keyC2)
+        private void SetBlackKeyToneHeights(List<PianoKey> blackKeys, int index)
+        {
+            // Tone is C#
+            ToneHeight startToneHeight = new ToneHeight(Pitch.Cis, 2);
+            blackKeys[index].ToneHeight = startToneHeight;
+            int startIndex = index;
+
+            // Set lower blackKeys' toneHeights
+            index = startIndex;
+            ToneHeight previousToneHeight = startToneHeight;
+            while (index > 0)
+            {
+                previousToneHeight = ToneHeight.GetPreviousBlack(previousToneHeight);
+                blackKeys[--index].ToneHeight = previousToneHeight;
+            }
+
+            // Set higher blackKeys' toneHeights
+            index = startIndex;
+            ToneHeight nextTone = startToneHeight;
+            while (index < blackKeys.Count - 1)
+            {
+                nextTone = ToneHeight.GetNextBlack(nextTone);
+                blackKeys[++index].ToneHeight = nextTone;
+            }
+        }
+
+        private void SetWhiteKeyToneHeights(List<PianoKey> whiteKeys, PianoKey keyC2)
         {
             // Tone is C#
             ToneHeight startTone = keyC2.ToneHeight;
@@ -797,16 +778,6 @@ namespace CreateSheetsFromVideo
             textBoxLog.AppendText(DateTime.Now.ToString("hh:mm:ss") + ":  " + text.ToString());
         }
 
-        public Color ColorForTone(Pitch pitch)
-        {
-            // Normalize
-            pitch = (Pitch)((int)pitch % ColorForPitchDict.Count);
-
-            //pitch = (Pitch)((int)pitch - ColorByPitch.Count);
-
-            return ColorForPitchDict[pitch];
-        }
-
         private readonly static Dictionary<Pitch, Color> ColorForPitchDict = new Dictionary<Pitch, Color>()
         {
             // White keys
@@ -824,28 +795,7 @@ namespace CreateSheetsFromVideo
             { Pitch.Gis, Color.Red },
             { Pitch.Bes, Color.Violet },
         };
-
-        private static Color CreateColorless(byte brightness)
-        {
-            return Color.FromArgb(brightness, brightness, brightness);
-        }
-
-        private void ButtonNextFrame_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        private void CheckBoxShowVisuals_CheckedChanged(object sender, EventArgs e)
-        {
-
-        }
-
-        private void CheckBoxRealtime_CheckedChanged(object sender, EventArgs e)
-        {
-
-        }
     }
-
 
 
     /// <summary>
@@ -854,18 +804,12 @@ namespace CreateSheetsFromVideo
     public class LineWithStatistics
     {
         public int Y { private set; get; }
-        public List<int> WhiteKeyDistances { private set; get; }
-        public List<int> DarkKeyDistances { private set; get; }
 
         public double MeanBrightness { private set; get; }
 
-        public double WhiteKeyStdDeviation { private set; get; }
-        public double DarkDeviation { private set; get; }
         public double WhiteKeyDistanceMean { private set; get; }
         public double DarkKeyDistanceMean { private set; get; }
 
-        public List<int> WhiteKeyPositions { private set; get; } = new List<int>();
-        public List<int> DarkKeyPositions { private set; get; } = new List<int>();
         public List<double> BrightnessValues { private set; get; }
 
         public LineWithStatistics(int y,
@@ -873,34 +817,13 @@ namespace CreateSheetsFromVideo
             List<double> brightnessValues)
         {
             Y = y;
-            //WhiteKeyDistances = whiteKeyDistances;
-            //DarkKeyDistances = blackKeyDistances;
             BrightnessValues = brightnessValues;
             MeanBrightness = brightnessValues.Sum() / brightnessValues.Count;
-
-            //WhiteKeyStdDeviation = WhiteKeyDistances.StandardDeviation();
-            //DarkDeviation = DarkKeyDistances.StandardDeviation();
-            //WhiteKeyDistanceMean = (double)whiteKeyDistances.Sum() / whiteKeyDistances.Count;
-            //DarkKeyDistanceMean = (double)blackKeyDistances.Sum() / blackKeyDistances.Count;
-
-            //int keyPosition = 0;
-            //foreach (int whiteKeyDistance in whiteKeyDistances)
-            //{
-            //    keyPosition += whiteKeyDistance;
-            //    WhiteKeyPositions.Add(keyPosition);
-            //}
-
-            //keyPosition = 0;
-            //foreach (int whiteKeyDistance in whiteKeyDistances)
-            //{
-            //    keyPosition += whiteKeyDistance;
-            //    DarkKeyPositions.Add(keyPosition);
-            //}
         }
 
         public override string ToString()
         {
-            return $"Y = {Y}, Brightness = {MeanBrightness.ToShortString()}, BrightDev = {WhiteKeyStdDeviation.ToShortString()}, DarkDev = {DarkDeviation.ToShortString()}";
+            return $"Y = {Y}, Brightness = {MeanBrightness.ToShortString()}";
         }
     }
 }

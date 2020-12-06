@@ -39,7 +39,10 @@ namespace CreateSheetsFromVideo
         public Pitch Pitch;
         public int Octave;
 
-        public int TotalHeight
+        /// <summary>
+        ///   Calcs a total value = octave * 12 + pitch
+        /// </summary>
+        public int TotalValue
         {
             get => Octave * 12 + (int)Pitch;
             set
@@ -58,15 +61,49 @@ namespace CreateSheetsFromVideo
         public static ToneHeight operator +(ToneHeight thisHeight, int value)
         {
             ToneHeight height = new ToneHeight();
-            height.TotalHeight = thisHeight.TotalHeight + value;
+            height.TotalValue = thisHeight.TotalValue + value;
             return height;
         }
 
         public static ToneHeight operator -(ToneHeight thisHeight, int value)
         {
             ToneHeight height = new ToneHeight();
-            height.TotalHeight = thisHeight.TotalHeight - value;
+            height.TotalValue = thisHeight.TotalValue - value;
             return height;
+        }
+
+        public int GetLineHeight()
+        {
+            int pitchStake = (int)GetWhitePitch(Pitch);
+            return 7 * Octave + pitchStake;
+        }
+
+        private static WhitePitch GetWhitePitch(Pitch pitch)
+        {
+            switch (pitch)
+            {
+                case Pitch.C:
+                case Pitch.Cis:
+                    return WhitePitch.C;
+                case Pitch.D:
+                    return WhitePitch.D;
+                case Pitch.Es:
+                case Pitch.E:
+                    return WhitePitch.E;
+                case Pitch.F:
+                case Pitch.Fis:
+                    return WhitePitch.F;
+                case Pitch.G:
+                case Pitch.Gis:
+                    return WhitePitch.G;
+                case Pitch.A:
+                    return WhitePitch.A;
+                case Pitch.Bes:
+                case Pitch.B:
+                    return WhitePitch.B;
+                default:
+                    throw new Exception();
+            }
         }
 
         public static ToneHeight GetPreviousWhite(ToneHeight toneHeight)
@@ -152,4 +189,5 @@ namespace CreateSheetsFromVideo
             return first.Pitch != second.Pitch || first.Octave != second.Octave;
         }
     }
+
 }

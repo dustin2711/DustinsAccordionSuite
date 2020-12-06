@@ -19,9 +19,6 @@ using System.Xml.Serialization;
 /// </summary>
 namespace CreateSheetsFromVideo
 {
-    enum AcchordType { Dur, Mol, Sept, SeptMin }
-    enum HandType { Left, Both, Right }
-
     public class SheetBuilder
     {
         public double MinimumNoteLength => beatDuration / 32;
@@ -41,10 +38,10 @@ namespace CreateSheetsFromVideo
         private int beatCounter = -1;
         private readonly double beatDuration;
 
-        public SheetBuilder(List<Tone> tonesInput, string title)
+        public SheetBuilder(SheetSave sheetSave, string title)
         {
             // Order tones by starttime
-            List<Tone> tones = tonesInput.OrderBy(t => t.StartTime).ToList();
+            List<Tone> tones = sheetSave.tones.OrderBy(t => t.StartTime).ToList();
 
             // Get beat values
             beatDuration = GetBeatDuration(tones, out double firstBeatTime);

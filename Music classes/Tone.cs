@@ -55,11 +55,6 @@ namespace CreateSheetsFromVideo
             set => EndTime = StartTime + value;
         }
 
-        /// <summary>
-        ///   For serializing
-        /// </summary>
-        public Tone() { }
-
         private Tone(Tone other)
         {
             Hand = other.Hand;
@@ -71,11 +66,23 @@ namespace CreateSheetsFromVideo
             IsPartOfAnotherChord = other.IsPartOfAnotherChord;
         }
 
+        /// <summary>
+        ///   For serializing
+        /// </summary>
+        public Tone() { }
+
         public Tone(ToneHeight toneHeight, Color color, double startTime)
         {
             ToneHeight = toneHeight;
             Color = color;
             StartTime = startTime;
+        }
+
+        public Tone(ToneHeight toneHeight, double startTime, double duration)
+        {
+            ToneHeight = toneHeight;
+            StartTime = startTime;
+            Duration = duration;
         }
 
         public Tone[] SplitTone(double splitTime)

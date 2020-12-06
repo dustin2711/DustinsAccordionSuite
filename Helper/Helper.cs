@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Drawing;
 
 namespace CreateSheetsFromVideo
 {
@@ -36,6 +37,11 @@ namespace CreateSheetsFromVideo
         public static string TimeStringFromMs(double milliseconds)
         {
             return TimeSpan.FromMilliseconds(milliseconds).ToString(@"mm\:ss\:fff");
+        }
+
+        private static Color CreateColorless(byte brightness)
+        {
+            return Color.FromArgb(brightness, brightness, brightness);
         }
     }
 }
