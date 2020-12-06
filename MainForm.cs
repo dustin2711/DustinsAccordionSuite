@@ -68,8 +68,7 @@ namespace CreateSheetsFromVideo
         // Settings
         private const ColorMode KeyColorMode = ColorMode.Green; //Blue = left, green = right
         private const AppMode Mode = AppMode.Save;
-        //private const double StartTime = 0;
-        private const double StartTime = 4.7;
+        private const double StartTime = 5.0;
         private const double EndTime = double.MaxValue;
         private const bool IsPlayingDefault = false;
         private const bool PlayRealtimeDefault = true;
@@ -122,7 +121,7 @@ namespace CreateSheetsFromVideo
                     InitVideoPlayerAndFrameViewer(VideoPath);
 
                     // Video play thread
-                    TimeChanged += SetFrameByTime;
+                    //TimeChanged += SetFrameByTime;
                     new Thread(() =>
                     {
                         while (frameIndex < frameViewer.FrameCount
@@ -131,7 +130,8 @@ namespace CreateSheetsFromVideo
                             try
                             {
                                 CurrentTime = mediaPlayer.Ctlcontrols.currentPosition;
-                                TimeChanged?.Invoke(CurrentTime);
+                                //TimeChanged?.Invoke(CurrentTime);
+                                this.Invoke(() => SetFrameByTime(CurrentTime));
                             }
                             catch { }
                             Thread.Sleep(1);
@@ -377,15 +377,10 @@ namespace CreateSheetsFromVideo
             }
         }
 
-        private string TimeStringFromMs(double milliseconds)
-        {
-            return TimeSpan.FromMilliseconds(milliseconds).ToString(@"mm\:ss\:fff");
-        }
 
         private void PlayPause()
         {
             isPlaying = !isPlaying;
-
             if (isPlaying)
             {
                 mediaPlayer.Ctlcontrols.play();
@@ -398,20 +393,17 @@ namespace CreateSheetsFromVideo
 
         private void PlayPreviousFrameMediaPlayer()
         {
-            //mediaPlayer.Ctlcontrols.currentPosition -= FrameDuration;
-            //mediaPlayer.Ctlcontrols.pause();
             Controls2.step(-1);
         }
 
         private void PlayNextFrameMediaPlayer()
         {
-            //mediaPlayer.Ctlcontrols.currentPosition += FrameDuration;
-            //mediaPlayer.Ctlcontrols.pause();
             Controls2.step(1);
         }
-
    
-
+        /// <summary>
+        ///   Sets the time for the FrameViewer.
+        /// </summary>
         private void SetFrameByTime(double time)
         {
             long newFrameIndex = (long)(time / FrameDuration + 0.5);
@@ -423,7 +415,8 @@ namespace CreateSheetsFromVideo
 
                 //Log("Frame = " + this.frameIndex + ", frameTime = " + (frameIndex * FrameDuration).ToShortString() + ", videoTime = " + CurrentTime.ToShortString());
                 Watch.Start();
-                Frame = frameViewer.ReadVideoFrame((int)newFrameIndex);
+                Frame = new Bitmap(frameViewer.ReadVideoFrame((int)newFrameIndex));
+
                 Watch.Measure(Log);
 
                 // Colorize recognized keys
@@ -440,6 +433,7 @@ namespace CreateSheetsFromVideo
                 }
                 else if (frameProgress == 1)
                 {
+                    Frame.SetPixel16(20, 66, Color.Green);
                     AnalyseTones();
                 }
 
@@ -458,7 +452,8 @@ namespace CreateSheetsFromVideo
             // COLLECT TONES
             /////////////////
 
-            if (CurrentTime > maximumPlayedTime || PrintHandledTonesAgain)
+            if (CurrentTime > maximumPlayedTime 
+                || PrintHandledTonesAgain)
             {
                 foreach (PianoKey key in pianoKeys)
                 {

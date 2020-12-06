@@ -33,5 +33,9 @@ namespace CreateSheetsFromVideo
             }
         }
 
+        public static string TimeStringFromMs(double milliseconds)
+        {
+            return TimeSpan.FromMilliseconds(milliseconds).ToString(@"mm\:ss\:fff");
+        }
     }
 }
