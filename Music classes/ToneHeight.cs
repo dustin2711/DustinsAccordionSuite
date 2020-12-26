@@ -72,7 +72,10 @@ namespace CreateSheetsFromVideo
             return height;
         }
 
-        public int GetLineHeight()
+        /// <summary>
+        ///   Gets the number of the key on the keyboard or in sheets (black keys belong to white keys)
+        /// </summary>
+        public int GetKeyNumber()
         {
             int pitchStake = (int)GetWhitePitch(Pitch);
             return 7 * Octave + pitchStake;

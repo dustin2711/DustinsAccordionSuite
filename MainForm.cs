@@ -28,8 +28,8 @@ namespace CreateSheetsFromVideo
     /// <summary>
     ///   ToDo:
     ///   - Lange Note und währenddessen viele kleine
-    ///   (- Rechts werden zu viele Noten angezeigt (3 obwohl 1 gespielt) ODER rechts/links vertauscht sich innerhalb des Stücks)
-    ///   - Warum wird Frame anzeigen immer langsamer? :o
+    ///   - NORMALIZE Tonhöhe (aktuell schweben Noten krank weit oben)
+    ///   - Warum spielt Musescore keinen Ton ab?  
     /// </summary>
     public partial class MainForm : Form
     {
@@ -41,10 +41,10 @@ namespace CreateSheetsFromVideo
         private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow 360.mp4";
 
         // Settings
-        private const ColorMode KeyColorMode = ColorMode.Green; //Blue = left, green = right
         private const AppMode Mode = AppMode.Load;
+        private const ColorMode KeyColorMode = ColorMode.All; //Blue = left, green = right
         private const double StartTime = 5.0;
-        private const double EndTime = 30;
+        private const double EndTime = 25;
         private const bool IsPlayingDefault = false;
         private const bool PlayRealtimeDefault = true;
         private const bool ShowVisualsDefault = true;
@@ -63,7 +63,12 @@ namespace CreateSheetsFromVideo
         private List<PianoKey> pianoKeys;
 
         // For manual inserting beat beginnings
-        private List<double> beatTimes = new List<double>();
+        private List<BeatTime> beatTimes = new List<BeatTime>();
+
+        private bool IsRightHand(Tone tone)
+        {
+            return tone.Color.GetHue() < 150;
+        }
 
         public MainForm()
         {
@@ -71,7 +76,7 @@ namespace CreateSheetsFromVideo
 
             InitializeComponent();
             InitializeUI();
-            InitNoteImage();
+            InitializeNoteBar();
 
             if (Mode == AppMode.Load)
             {
@@ -80,49 +85,46 @@ namespace CreateSheetsFromVideo
                 //var loaded = LoadTones(tonesPath);
 
                 SheetSave save = LoadSheetSave(SheetSavePath);
+                DrawTones(save.Tones);
 
-                SheetBuilder builder = new SheetBuilder(save, Path.GetFileNameWithoutExtension(VideoPath));
+                SheetBuilder builder = new SheetBuilder(LogLine, save, Path.GetFileNameWithoutExtension(VideoPath));
                 builder.SaveAsFile(Path.ChangeExtension(VideoPath, ".musicxml"));
 
-                Load += (s, e) => Close();
-                return;
+                //Load += (s, e) => Close();
             }
-            else
+
+            Shown += (s, e) =>
             {
-                Shown += (s, e) =>
+                InitVideoPlayerAndFrameViewer(VideoPath);
+
+                // Video play thread
+                //TimeChanged += SetFrameByTime;
+                new Thread(() =>
                 {
-                    InitVideoPlayerAndFrameViewer(VideoPath);
-
-                    // Video play thread
-                    //TimeChanged += SetFrameByTime;
-                    new Thread(() =>
+                    while (frameIndex < frameViewer.FrameCount
+                        && CurrentTime < EndTime)
                     {
-                        while (frameIndex < frameViewer.FrameCount
-                            && CurrentTime < EndTime)
+                        try
                         {
-                            try
-                            {
-                                CurrentTime = mediaPlayer.Ctlcontrols.currentPosition;
-                                //TimeChanged?.Invoke(CurrentTime);
-                                this.Invoke(() => SetFrameByTime(CurrentTime));
-                            }
-                            catch { }
-                            Thread.Sleep(1);
+                            CurrentTime = mediaPlayer.Ctlcontrols.currentPosition;
+                            //TimeChanged?.Invoke(CurrentTime);
+                            this.Invoke(() => SetFrameByTime(CurrentTime));
                         }
+                        catch { }
+                        Thread.Sleep(1);
+                    }
 
-                        // EVALUATE
-                        Evaluate();
-                    }).Start();
+                    // EVALUATE
+                    Evaluate();
+                }).Start();
 
-                    RefreshUI();
-                };
-            }
+                RefreshUI();
+            };
         }
 
         private void SaveYoutubeVideo(string link)
         {
-            YouTube youTube = YouTube.Default; // starting point for YouTube actions
-            YouTubeVideo video = youTube.GetVideo(link); // gets a Video object with info about the video
+            YouTubeVideo video = YouTube.Default.GetVideo(link); // gets a Video object with info about the video
             File.WriteAllBytes(@"C:\Users\Dustin\Desktop\" + video.FullName, video.GetBytes());
         }
 
@@ -172,7 +174,7 @@ namespace CreateSheetsFromVideo
         private void InitProgramm()
         {
             InitVideoPlayerAndFrameViewer(VideoPath);
-            InitNoteImage();
+            InitializeNoteBar();
 
             // Clear lists
             pianoKeys.Clear();
@@ -280,21 +282,22 @@ namespace CreateSheetsFromVideo
                 //    e.Handled = true;
                 //    break;
                 case Keys.B:
-                    InsertBeat();
+                    // B = MainBeat
+                    InsertBeat(true);
+                    e.Handled = true;
+                    break;
+                case Keys.N:
+                    // N = SubBeat
+                    InsertBeat(false);
                     e.Handled = true;
                     break;
             }
         }
 
-        private void InsertBeat()
+        private void InsertBeat(bool mainBeat)
         {
-            beatTimes.Add(CurrentTime);
-            textBoxBeatTimes.Clear();
-            foreach (double beatTime in beatTimes)
-            {
-                textBoxBeatTimes.AppendText(beatTime.ToShortString() + Environment.NewLine);
-            }
-            DrawBeatDash();
+            beatTimes.Add(new BeatTime(mainBeat, CurrentTime));
+            DrawBeatDash(mainBeat);
         }
 
         /// <summary>
@@ -327,7 +330,8 @@ namespace CreateSheetsFromVideo
             File.WriteAllText(path, "");
             using (FileStream stream = new FileStream(path, FileMode.OpenOrCreate))
             {
-                new XmlSerializer(typeof(SheetSave)).Serialize(stream, new SheetSave(tonesPast, beatTimes));
+                new XmlSerializer(typeof(SheetSave)).Serialize(stream, 
+                    new SheetSave(Path.GetFileNameWithoutExtension(path), StartTime, tonesPast, beatTimes));
             }
         }
 
@@ -367,6 +371,8 @@ namespace CreateSheetsFromVideo
             {
                  mediaPlayer.Ctlcontrols.pause();
             }
+
+            RefreshUI();
         }
 
         private void PlayPreviousFrameMediaPlayer()
@@ -392,10 +398,9 @@ namespace CreateSheetsFromVideo
                 frameIndex = newFrameIndex;
 
                 //Log("Frame = " + this.frameIndex + ", frameTime = " + (frameIndex * FrameDuration).ToShortString() + ", videoTime = " + CurrentTime.ToShortString());
-                Watch.Start();
+                //Watch.Start();
                 Frame = new Bitmap(frameViewer.ReadVideoFrame((int)newFrameIndex));
-
-                Watch.Measure(Log);
+                //Watch.Measure(Log);
 
                 // Colorize recognized keys
                 if (Initializing)
@@ -406,7 +411,7 @@ namespace CreateSheetsFromVideo
 
                 if (!Initializing && frameProgress > 1)
                 {
-                    Log(@"WARNING: Skipped " + frameProgress + " frames");
+                    LogLine(@"WARNING: Skipped " + frameProgress + " frames");
                     //MessageBox.Show("Skipping " + frameDelta + " frames");
                 }
                 else if (frameProgress == 1)
@@ -701,7 +706,7 @@ namespace CreateSheetsFromVideo
 
                 List<PianoKey> keys = whiteKeys.Concat(blackKeys).ToList();
                 bool anySameToneHeight = keys.GroupBy(x => x.ToneHeight.TotalValue).Any(key => key.Count() > 1);
-                Log("Same tone heights = " + anySameToneHeight);
+                LogLine("Same tone heights = " + anySameToneHeight);
                 return keys;
             }
         }
@@ -757,16 +762,16 @@ namespace CreateSheetsFromVideo
             }
         }
 
-        private void Log(object text)
+        private void LogLine(object text)
         {
-            LogNoLine(text + Environment.NewLine);
+            Log(text + Environment.NewLine);
         }
 
-        private void LogNoLine(object text)
+        private void Log(object text)
         {
             if (InvokeRequired)
             {
-                Invoke(new Action(() => LogNoLine(text)));
+                Invoke(new Action(() => Log(text)));
                 return;
             }
 

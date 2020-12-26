@@ -5,53 +5,62 @@ namespace CreateSheetsFromVideo
 {
     public partial class MainForm
     {
-        private int NoteBarWidth;
-        private int NoteBarHeight;
         private static Brush BrushGray= new SolidBrush(Color.DarkGray);
         private static Brush BrushBlack = new SolidBrush(Color.Black);
-        private static Pen PenBlack = new Pen(BrushBlack);
+        private static Pen PenBlack = new Pen(BrushBlack, 2);
+        private static Pen PenGray = new Pen(BrushGray, 2);
         private List<int> lineHeights = new List<int>();
-        private int lineGap = 0;
-        private int firstLineHeight;
+
         private const float WidthPerSecond = 80f;
-        private const double SpacePercentage = 0.4; // above and below lines is each space of 0.3 * imageHeight
+        private const int LineGap = 12;
+        private const int FirstLineDistanceFromBorder = 3 * LineGap;
 
         private int CurrentDrawPositionX => (int)((CurrentTime - StartTime) * WidthPerSecond);
 
-        private void DrawBeatDash()
+        private void DrawBeatDash(bool mainBeat)
         {
             using (Graphics graphics = Graphics.FromImage(pictureBoxNotes.Image))
             {
-                graphics.DrawLine(PenBlack,
+                graphics.DrawLine(mainBeat ? PenBlack : PenGray,
                     new Point(CurrentDrawPositionX, 0),
-                    new Point(CurrentDrawPositionX, NoteBarHeight));
+                    new Point(CurrentDrawPositionX, pictureBoxNotes.Height));
             }
         }
 
         /// <summary>
         ///   Draws the lines and prepares the image showing notes visually
         /// </summary>
-        private void InitNoteImage()
+        private void InitializeNoteBar()
         {
-            NoteBarWidth = pictureBoxNotes.Width;
-            NoteBarHeight = pictureBoxNotes.Height;
-
-            // Collect line heights
-            firstLineHeight = NoteBarHeight - (int)(SpacePercentage * NoteBarHeight);
-            lineGap = (int)(SpacePercentage * NoteBarHeight / 5.0);
+            // Calc heights for right hand..
             for (int index = 0; index < 5; index++)
             {
-                lineHeights.Add(firstLineHeight - lineGap * index);
+                lineHeights.Add(FirstLineDistanceFromBorder + LineGap * index);
+            }
+            // ..and left hand
+            for (int index = 0; index < 5; index++)
+            {
+                lineHeights.Add(FirstLineDistanceFromBorder + LineGap * (index + 7));
             }
 
-            pictureBoxNotes.Image = new Bitmap(NoteBarWidth, NoteBarHeight);
+            pictureBoxNotes.Image = new Bitmap(pictureBoxNotes.Width, pictureBoxNotes.Height);
             using (Graphics graphics = Graphics.FromImage(pictureBoxNotes.Image))
             {
-                // Draw 5 tone-lines
+                // Draw 5 tone lines
                 foreach (int height in lineHeights)
                 {
-                    graphics.DrawLine(PenBlack, new PointF(0, height), new PointF(NoteBarWidth, height));
+                    graphics.DrawLine(PenBlack, 
+                        new PointF(0, height), 
+                        new PointF(pictureBoxNotes.Width, height));
                 }
+            }
+        }
+
+        private void DrawTones(List<Tone> tones)
+        {
+            foreach (Tone tone in tones)
+            {
+                DrawTone(tone);
             }
         }
 
@@ -60,22 +69,38 @@ namespace CreateSheetsFromVideo
         /// </summary>
         private void DrawTone(Tone tone)
         {
-            int yFromToneHeight(ToneHeight toneHeight)
+            int GetDrawingHeight(ToneHeight toneHeight)
             {
-                return firstLineHeight + (int)((toneHeight.GetLineHeight() - (7 * 7 + 2)) * 0.5 * lineGap);
+                // The higher the key number
+                int keyNumber = toneHeight.GetKeyNumber();
+                int offset = (int)((51 - keyNumber) * 0.5 * LineGap); // 51 * 0.5 * 12
+                //Log(toneHeight + ": " + keyNumber + " (" + (IsRightHand(tone) ? "R" : "L") + ", " + offset + ")");
+                return FirstLineDistanceFromBorder + offset;
             }
 
             using (Graphics graphics = Graphics.FromImage(pictureBoxNotes.Image))
             {
-                PointF position = new PointF( // 40|160
-                        CurrentDrawPositionX,
-                        yFromToneHeight(tone.ToneHeight));
-                SizeF size = new SizeF( // 80|14
-                        (float)(tone.Duration * WidthPerSecond),
-                        lineGap);
+                float width = (float)(tone.Duration * WidthPerSecond); // Note width in pixels
+                PointF position = new PointF( // e.g. 40|160
+                        (int)((tone.EndTime - StartTime) * WidthPerSecond),
+                        GetDrawingHeight(tone.ToneHeight));
+                SizeF size = new SizeF(width, LineGap); // e.g. 80|14
                 graphics.DrawEllipse(PenBlack, new RectangleF(position, size));
-                graphics.FillEllipse(BrushGray, new RectangleF(position, size));
-                Log("Pos = " + position + ", Size = " + size);
+                graphics.FillEllipse(new SolidBrush(tone.Color), new RectangleF(position, size));
+
+                PointF midPosition = new PointF(position.X, position.Y + 0.5f * LineGap);
+                switch (tone.Pitch.Alter())
+                {
+                    case 1:
+                        midPosition.Y -= 0.25f * LineGap;
+                        graphics.DrawLine(PenBlack, midPosition, new PointF(midPosition.X + width, midPosition.Y));
+                        break;
+                    case -1:
+                        midPosition.Y += 0.25f * LineGap;
+                        graphics.DrawLine(PenBlack, midPosition, new PointF(midPosition.X + width, midPosition.Y));
+                        break;
+                }
+                //Log("Pos = " + position + ", Size = " + size);
             }
         }
     }

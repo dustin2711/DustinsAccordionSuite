@@ -11,19 +11,35 @@ namespace CreateSheetsFromVideo
 
     public static class Extensions
     {
+        public static int Alter(this Pitch pitch)
+        {
+            if (new Pitch[] { Pitch.Cis, Pitch.Fis, Pitch.Gis}.Contains(pitch))
+            {
+                return 1;
+            }
+            else if (new Pitch[] { Pitch.Es, Pitch.Bes}.Contains(pitch))
+            {
+                return -1;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
         public static string RemoveDigits(this string text)
         {
             return new string(text.Where(c => c < '0' || c > '9').ToArray());
         }
 
-        public static string ToShortString(this double value, string format = "0.000")
+        public static string ToShortString(this double value, int decimals = 2)
         {
-            return value.ToString(format);
+            return value.ToString("0." + new string('0', decimals));
         }
 
-        public static string ToShortString(this float value, string format = "0.000")
+        public static string ToShortString(this float value, int decimals = 2)
         {
-            return value.ToString(format);
+            return value.ToString("0." + new string('0', decimals));
         }
 
         public static void Invoke(this Control control, MethodInvoker action)
@@ -81,9 +97,14 @@ namespace CreateSheetsFromVideo
             return deviation;
         }
 
-        public static string ToLog<T>(this IEnumerable<T> values, int count = 20)
+        public static double Mean(this IEnumerable<double> someDoubles)
         {
-            return string.Join(",", values.Take(10));
+            return someDoubles.Sum() / someDoubles.Count();
+        }
+
+        public static string ToLog<T>(this IEnumerable<T> values, int count = 10)
+        {
+            return string.Join(",", values.Take(count));
         }
 
         /// <summary>

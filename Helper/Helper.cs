@@ -11,20 +11,17 @@ namespace CreateSheetsFromVideo
     public static class Helper
     {
         /// <summary>
-        ///   E.g. Inputs 2.2 and 2.0 result in 0.1 (10%)
+        ///   Returns how much the bigger number is bigger than the small number (always positive values).
+        ///   E.g. Inputs 2.2 and 2.0 => Returns 0.1 (2.2 is 10 % bigger than 2.0)
         /// </summary>
         public static double GetPercentageDistance(double a, double b)
         {
-            if (a == b)
-            {
-                return 0;
-            }
-            else if (a == 0 || b == 0)
+            if (a == 0 || b == 0)
             {
                 // Cannot divide by 0
                 return -1;
             }
-            else if (a > b)
+            else if (a >= b)
             {
                 return (a / b) - 1;
             }

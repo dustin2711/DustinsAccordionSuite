@@ -25,10 +25,10 @@ namespace CreateSheetsFromVideo
         public double MinimumNoteLengthBass => beatDuration / 8;
 
         // Technical settings
-        private const int OctaveOffset = 2;
+        private const int OctaveOffset = -3;
         private const double MaxDeltaToMergeAbs = 0.05;
         private const double MaxDeltaToMergeRel = 0.2;
-        private const HandType HandToCreateSheetsFor = HandType.Both;
+        private const HandType HandToCreateSheetsFor = HandType.Right;
 
         private ScorePartwise scorePartwise;
 
@@ -37,16 +37,18 @@ namespace CreateSheetsFromVideo
         /// </summary>
         private int beatCounter = -1;
         private readonly double beatDuration;
-
-        public SheetBuilder(SheetSave sheetSave, string title)
+        private Action<string> Log { get; }
+        public SheetBuilder(Action<string> Log, SheetSave sheetSave, string title)
         {
+            this.Log = Log;
+
             // Order tones by starttime
-            List<Tone> tones = sheetSave.tones.OrderBy(t => t.StartTime).ToList();
+            List<Tone> tones = sheetSave.Tones.OrderBy(t => t.StartTime).ToList();
 
             // Get beat values
-            beatDuration = GetBeatDuration(tones, out double firstBeatTime);
+            beatDuration = sheetSave.CalcBeatDuration(out double firstBeatTime, out double lastBeatTime);
             double firstToneStartTime = tones.First().StartTime;
-            double LatestBeatTime = firstBeatTime - beatDuration;
+            double latestBeatTime = firstBeatTime - beatDuration; // Gets incremented each added beat
 
             // Split left | right
             GetLeftAndRightHandTones(tones, out List<Tone> leftTonesUnmerged, out List<Tone> rightTonesUnmerged);
@@ -56,37 +58,59 @@ namespace CreateSheetsFromVideo
 
             // Create score
             scorePartwise = CreateScorePartwise(title, beatDuration, 
-                out ScorePartwisePart leftHandsPart, 
-                out ScorePartwisePart rightHandsPart);
+                out ScorePartwisePart leftPart, 
+                out ScorePartwisePart rightPart);
+
+            if (true)
+            {
+                // DEBUG
+                rightTones = new List<Tone>()
+                {
+                    new Tone(new ToneHeight(Pitch.G, 7), startTime: 1, duration: 4),
+                    new Tone(new ToneHeight(Pitch.D, 8), startTime: 1, duration: 3),
+                    new Tone(new ToneHeight(Pitch.C, 8), startTime: 3, duration: 3.5),
+                };
+                beatDuration = 4;
+                firstToneStartTime = 1;
+                latestBeatTime = 5;
+
+                //AddBeat();
+                beatCounter = 0;
+                AddNoteRight(rightTones[0]);
+                AddBackupRight(1);
+                AddNoteRight(rightTones[1]);
+                AddNoteRight(rightTones[2]);
+                return;
+            }
 
             void AddBeat()
             {
-                leftHandsPart.Measure.Add(new ScorePartwisePartMeasure()
+                leftPart.Measure.Add(new ScorePartwisePartMeasure()
                 {
                     Number = beatCounter.ToString(),
                     Width = 192
                 });
-                rightHandsPart.Measure.Add(new ScorePartwisePartMeasure()
+                rightPart.Measure.Add(new ScorePartwisePartMeasure()
                 {
                     Number = beatCounter.ToString(),
                     Width = 192
                 });
                 beatCounter++;
-                LatestBeatTime += beatDuration;
+                latestBeatTime += beatDuration;
             }
 
-            void AddNoteLeftHand(Tone tone)
+            void AddNoteLeft(Tone tone)
             {
-                AddTone(tone, leftHandsPart);
+                AddTone(tone, leftPart);
                 foreach (Tone chordTone in tone.ChordTones)
                 {
-                    AddTone(chordTone, leftHandsPart);
+                    AddTone(chordTone, leftPart);
                 }
             }
 
-            void AddNoteRightHand(Tone tone)
+            void AddNoteRight(Tone tone)
             {
-                AddTone(tone, rightHandsPart);
+                AddTone(tone, rightPart);
             }
 
             void AddTone(Tone tone, ScorePartwisePart part)
@@ -98,10 +122,20 @@ namespace CreateSheetsFromVideo
                 }
             }
 
-            // Adds pause to the right hand
-            void AddRightRest(double duration)
+            void AddBackupLeft(decimal duration)
             {
-                rightHandsPart.Measure[beatCounter].Note.Add(CreateRest(duration));
+                leftPart.Measure[beatCounter].Backup.Add(new Backup() { Duration = duration });
+            }
+
+            void AddBackupRight(decimal duration)
+            {
+                rightPart.Measure[beatCounter].Backup.Add(new Backup() { Duration = duration });
+            }
+
+            // Adds pause to the right hand
+            void AddRestRight(double duration)
+            {
+                rightPart.Measure[beatCounter].Note.Add(CreateRest(duration));
             }
 
             if (HandToCreateSheetsFor == HandType.Left)
@@ -113,11 +147,14 @@ namespace CreateSheetsFromVideo
                 leftTones.Clear();
             }
 
+            // Add first beat
             AddBeat();
             double beatStartTime = firstBeatTime - beatDuration;
             double beatEndTime = beatStartTime + beatDuration;
             double firstPause = firstToneStartTime - beatStartTime;
-            AddRightRest(firstPause);
+            AddRestRight(firstPause);
+
+            // Iterate tones
             int indexRight = 0;
             int indexLeft = 0;
             List<Tone> rightTonesCopy = new List<Tone>(rightTones);
@@ -131,7 +168,7 @@ namespace CreateSheetsFromVideo
                     if (tone.EndTime < beatEndTime)
                     {
                         // Tone ends in beat
-                        AddNoteRightHand(tone);
+                        AddNoteRight(tone);
                     }
                     else
                     {
@@ -148,7 +185,7 @@ namespace CreateSheetsFromVideo
 
                             // Note will finish the current beat
                             splits[0].StartStop = null;
-                            AddNoteRightHand(splits[0]);
+                            AddNoteRight(splits[0]);
                         }
                         else if (firstSplitIsTooShort && !secondSplitIsTooShort)
                         {
@@ -159,7 +196,7 @@ namespace CreateSheetsFromVideo
                         else
                         {
                             // Note is tied from current into next beat
-                            AddNoteRightHand(splits[0]);
+                            AddNoteRight(splits[0]);
                             rightTonesCopy.Insert(indexRight, splits[1]);
                         }
                     }
@@ -170,14 +207,10 @@ namespace CreateSheetsFromVideo
                 {
                     Tone tone = leftTonesCopy[indexLeft++];
 
-                    if (beatCounter == 92)
-                    {
-                    }
-
                     if (tone.EndTime < beatEndTime)
                     {
                         // Tone ends in beat
-                        AddNoteLeftHand(tone);
+                        AddNoteLeft(tone);
                     }
                     else
                     {
@@ -194,7 +227,7 @@ namespace CreateSheetsFromVideo
 
                             // Note will finish the current beat
                             splits[0].StartStop = null;
-                            AddNoteLeftHand(splits[0]);
+                            AddNoteLeft(splits[0]);
                         }
                         else if (firstSplitIsTooShort && !secondSplitIsTooShort)
                         {
@@ -205,7 +238,7 @@ namespace CreateSheetsFromVideo
                         else
                         {
                             // Note is tied from current into next beat
-                            AddNoteLeftHand(splits[0]);
+                            AddNoteLeft(splits[0]);
                             leftTonesCopy.Insert(indexLeft, splits[1]);
                         }
                     }
@@ -223,7 +256,8 @@ namespace CreateSheetsFromVideo
             int splitIndex = -1;
             for (int i = 0; i < tonesOrderedByHue.Count - 1; i++)
             {
-                if (tonesOrderedByHue[i].Color.GetHue() - tones[i + 1].Color.GetHue() > 50)
+                float hueDifference = Math.Abs(tonesOrderedByHue[i].Color.GetHue() - tonesOrderedByHue[i + 1].Color.GetHue());
+                if (hueDifference > 50)
                 {
                     splitIndex = i;
                     break;
@@ -259,80 +293,6 @@ namespace CreateSheetsFromVideo
             {
                 tone.Hand = Hand.Right;
             }
-        }
-
-        private static double GetBeatDuration(List<Tone> tones, out double firstBeatTime)
-        {
-            // Order by time
-            tones = tones.OrderBy(t => t.StartTime).ToList();
-
-            // Create dict where each time gets all keys that are played in this moment
-            Dictionary<double, List<Tone>> tonesForTimeDict = new Dictionary<double, List<Tone>>();
-            foreach (Tone tone in tones)
-            {
-                bool newTime = true;
-                // Go through all lists and find StartTime match
-                foreach (var tones_ in tonesForTimeDict.Values)
-                {
-                    if (tones_.First().StartTime == tone.StartTime)
-                    {
-                        tones_.Add(tone);
-                        newTime = false;
-                    }
-                }
-                if (newTime)
-                {
-                    tonesForTimeDict.Add(tone.StartTime, new List<Tone>() { tone });
-                }
-            }
-
-            // Get time deltas (useful for divisions?)
-            //List<double> timeDeltas = new List<double>();
-            //List<double> times = tonesForTimeDict.Keys.ToList();
-            //for (int i = 0; i < tonesForTimeDict.Count - 1; i++)
-            //{
-            //    timeDeltas.Add(times[i + 1] - times[i]);
-            //}
-
-            // Get beat by determining distance betweens first 2 chords (at least 3 keys at once)
-            double beatDuration = -1;
-            firstBeatTime = -1;
-            // For determining more exact beatLength
-            List<BeatChord> beatMultiples = new List<BeatChord>();
-            foreach (var tonesForTime in tonesForTimeDict)
-            {
-                // Min 3 keys pressed:
-                if (tonesForTime.Value.Count >= 3)
-                {
-                    if (firstBeatTime == -1)
-                    {
-                        firstBeatTime = tonesForTime.Key;
-                    }
-                    else if (beatDuration == -1)
-                    {
-                        // Got two times: Set first beat length
-                        beatDuration = tonesForTime.Key - firstBeatTime;
-                    }
-                    else
-                    {
-                        // BeatDelta already set: Collect BeatChords
-                        beatMultiples.Add(new BeatChord(tonesForTime.Key, firstBeatTime, beatDuration));
-                    }
-                }
-            }
-
-            // Find more exact beat lenth
-            beatMultiples.Reverse();
-            foreach (BeatChord multiple in beatMultiples)
-            {
-                if (multiple.MultipleRest < 0.05)
-                {
-                    beatDuration = (multiple.Time - firstBeatTime) / Math.Round(multiple.Multiple);
-                    return beatDuration;
-                }
-            }
-
-            throw new Exception("Could not get beat duration");
         }
 
         //public void AddNoteC(ScorePartwisePartMeasure measure)
@@ -404,37 +364,33 @@ namespace CreateSheetsFromVideo
 
             // Find out duration ("NoteTypeValue")
             NoteTypeValue? noteTypeValue = null;
-            bool dotted = false;
+            Dotting dotting = Dotting.None;
             double noteDuration = tone.Duration / beatDuration;
-            //Console.WriteLine("Note length = " + noteDuration);
-            /// <summary>
-            ///   If 0.1 = 10%, a note with 0.55 duration is only just converted to a note with 1/2 (0.5) length
-            /// </summary>
-            foreach (double roundTolerance in new double[] { 0.05, 0.1, 0.15, 0.20, 0.25})
+
+            Dictionary<Dotting, double> FactorForDotting = new Dictionary<Dotting, double>()
             {
-                foreach (var valueForDuration in NoteTypeValueForDurationDict)
+                [Dotting.None] = 1,
+                [Dotting.Single] = 1.5,
+                [Dotting.Double] = 1.75
+            };
+            List<NoteValueResult> results = new List<NoteValueResult>();
+            /// If roundTolerance == 0.1 (10%), a note with 0.55 duration is only just converted to a note with 0.5 length (one half)
+            foreach (var valueForDuration in NoteTypeValueForDurationDict)
+            {
+                void AddResult(Dotting dotting1)
                 {
-                    if (Helper.GetPercentageDistance(noteDuration, valueForDuration.Key) < roundTolerance)
-                    {
-                        noteTypeValue = valueForDuration.Value;
-                        break;
-                    }
+                    results.Add(new NoteValueResult(
+                        valueForDuration.Value,
+                        dotting1,
+                        Helper.GetPercentageDistance(noteDuration, FactorForDotting[dotting1] * valueForDuration.Key)));
                 }
 
-                // No match: Try dotted
-                if (noteTypeValue == null)
-                {
-                    foreach (var valueForDuration in NoteTypeValueForDurationDict)
-                    {
-                        if (Helper.GetPercentageDistance(noteDuration, 1.5 * valueForDuration.Key) < roundTolerance)
-                        {
-                            noteTypeValue = valueForDuration.Value;
-                            dotted = true;
-                            break;
-                        }
-                    }
-                }
+                AddResult(Dotting.None);
+                AddResult(Dotting.Single);
+                AddResult(Dotting.Double);
             }
+            results = results.OrderBy(res => res.deviation).ToList();
+            noteTypeValue = results.First().noteTypeValue;
 
             if (noteTypeValue == null)
             {
@@ -451,7 +407,7 @@ namespace CreateSheetsFromVideo
                 {
                     Step = step,
                     Alter = alter,
-                    AlterSpecified = true,
+                    AlterSpecified = alter != 0,
                     Octave = octave.ToString() // 4 is default
                 },
                 Duration = (decimal)noteDuration, // Only needful for midi
@@ -539,8 +495,13 @@ namespace CreateSheetsFromVideo
                 });
             }
 
-            if (dotted)
+            if (dotting == Dotting.Single)
             {
+                note.Dot.Add(new EmptyPlacement());
+            }
+            else if (dotting == Dotting.Double)
+            {
+                note.Dot.Add(new EmptyPlacement());
                 note.Dot.Add(new EmptyPlacement());
             }
 
@@ -668,6 +629,9 @@ namespace CreateSheetsFromVideo
 
         private static ScorePartwise CreateScorePartwise(string title, double beatDuration, out ScorePartwisePart leftHandsPart, out ScorePartwisePart rightHandsPart)
         {
+            const string LeftHand = "LeftHand";
+            const string RightHand = "RightHand";
+
             // Create ScorePartwise
             ScorePartwise scorePartwise = new ScorePartwise()
             {
@@ -676,14 +640,14 @@ namespace CreateSheetsFromVideo
                 {
                     ScorePart = new System.Collections.ObjectModel.Collection<ScorePart>()
                     {
-                        new ScorePart() { Id = "RightPart", PartName = new PartName() {Value = "RightPart" } },
-                        new ScorePart() { Id = "LeftPart", PartName = new PartName() {Value = "LeftPart" } }
+                        new ScorePart() { Id = RightHand, PartName = new PartName() {Value = RightHand } },
+                        new ScorePart() { Id = LeftHand, PartName = new PartName() {Value = LeftHand } }
                     }
                 }
             };
 
             //Right hand
-            rightHandsPart = new ScorePartwisePart() { Id = "RightPart" };
+            rightHandsPart = new ScorePartwisePart() { Id = RightHand };
             scorePartwise.Part.Add(rightHandsPart);
             ScorePartwisePartMeasure rightPartMeasure = new ScorePartwisePartMeasure()
             {
@@ -693,7 +657,7 @@ namespace CreateSheetsFromVideo
             rightHandsPart.Measure.Add(rightPartMeasure);
 
             // Left hand
-            leftHandsPart = new ScorePartwisePart() { Id = "LeftPart" };
+            leftHandsPart = new ScorePartwisePart() { Id = LeftHand };
             scorePartwise.Part.Add(leftHandsPart);
             ScorePartwisePartMeasure leftPartMeasure = new ScorePartwisePartMeasure()
             {
@@ -736,6 +700,36 @@ namespace CreateSheetsFromVideo
             XmlSerializer serializer = new XmlSerializer(typeof(ScorePartwise));
             serializer.Serialize(new FileStream(path, FileMode.OpenOrCreate), scorePartwise);
             Console.WriteLine("Saved Music Xml here as " + path);
+        }
+
+        private enum Dotting { None, Single, Double }
+
+        private class NoteValueResult
+        {
+            public NoteTypeValue noteTypeValue;
+            public Dotting dotting;
+            public double deviation;
+
+            public NoteValueResult(NoteTypeValue noteTypeValue, Dotting dotting, double deviation)
+            {
+                this.noteTypeValue = noteTypeValue;
+                this.dotting = dotting;
+                this.deviation = deviation;
+            }
+
+            public override string ToString()
+            {
+                string dottingString = "";
+                if (dotting == Dotting.Single)
+                {
+                    dottingString = ".";
+                }
+                else if (dotting == Dotting.Double)
+                {
+                    dottingString = "..";
+                }
+                return $"{noteTypeValue}{dottingString} : {deviation}";
+            }
         }
     }
 }

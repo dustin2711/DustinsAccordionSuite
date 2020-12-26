@@ -110,7 +110,7 @@ namespace CreateSheetsFromVideo
                 pitches += "+" + tone.Pitch;
             }
             return $"{pitches} {(IsPartOfAnotherChord ? " (part)" : "")},   " +
-                $"{StartTime.ToShortString()} - {EndTime.ToShortString()} ({Duration.ToShortString()})" +
+                $"{StartTime.ToShortString(3)} - {EndTime.ToShortString(3)} ({Duration.ToShortString(3)})" +
                 $", Hue={Color.GetHue().ToShortString()}";
         }
     }

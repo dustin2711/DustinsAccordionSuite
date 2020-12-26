@@ -390,7 +390,7 @@
             // 
             this.pictureBoxNotes.Location = new System.Drawing.Point(0, 558);
             this.pictureBoxNotes.Name = "pictureBoxNotes";
-            this.pictureBoxNotes.Size = new System.Drawing.Size(1920, 130);
+            this.pictureBoxNotes.Size = new System.Drawing.Size(1920, 201);
             this.pictureBoxNotes.TabIndex = 25;
             this.pictureBoxNotes.TabStop = false;
             // 
