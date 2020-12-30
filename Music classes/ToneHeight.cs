@@ -6,13 +6,21 @@ using System.Threading.Tasks;
 
 namespace CreateSheetsFromVideo
 {
-
+    /// <summary>
+    ///   Pair of Pitch & Octave
+    /// </summary>
     public struct ToneHeight
     {
         /// Static 
         //////////////
-        ///
-        private readonly static Pitch[] WhitePitches = new Pitch[]
+
+        public static ToneHeight C4 => new ToneHeight(Pitch.C, 4);
+        public static ToneHeight D4 => new ToneHeight(Pitch.D, 4);
+        public static ToneHeight E4 => new ToneHeight(Pitch.E, 4);
+        public static ToneHeight F4 => new ToneHeight(Pitch.F, 4);
+        public static ToneHeight G4 => new ToneHeight(Pitch.G, 4);
+
+        private static readonly Pitch[] WhitePitches = new Pitch[]
         {
             Pitch.C,
             Pitch.D,
@@ -23,7 +31,7 @@ namespace CreateSheetsFromVideo
             Pitch.B
         };
 
-        private readonly static Pitch[] BlackPitches = new Pitch[]
+        private static readonly Pitch[] BlackPitches = new Pitch[]
         {
             Pitch.Cis,
             Pitch.Es,

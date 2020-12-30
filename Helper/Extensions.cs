@@ -119,7 +119,7 @@ namespace CreateSheetsFromVideo
         /// <summary>
         ///   Double = relative delta, Float = absolute delta
         /// </summary>
-        public static bool IsAboutRel(this double value, double otherValue, double relativeDelta = 0.1)
+        public static bool IsAboutRelative(this double value, double otherValue, double relativeDelta = 0.1)
         {
             if (value == 0 && otherValue == 0)
             {
@@ -139,7 +139,7 @@ namespace CreateSheetsFromVideo
         /// <summary>
         ///   Math.Abs(value - otherValue) <= absoluteDelta
         /// </summary>
-        public static bool IsAboutAbs(this double value, double otherValue, double absoluteDelta)
+        public static bool IsAboutAbsolute(this double value, double otherValue, double absoluteDelta)
         {
             return Math.Abs(value - otherValue) <= absoluteDelta;
         }

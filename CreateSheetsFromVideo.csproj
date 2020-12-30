@@ -225,10 +225,11 @@
     <Compile Include="MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="Music classes\BeatNote.cs" />
-    <Compile Include="Music classes\Beat.cs" />
+    <Compile Include="Music classes\Note.cs" />
+    <Compile Include="Music classes\Score.cs" />
     <Compile Include="Music classes\Enums.cs" />
     <Compile Include="Music classes\SheetSave.cs" />
+    <Compile Include="Music classes\SheetSaveTest.cs" />
     <Compile Include="MusicXmlSchema.cs" />
     <Compile Include="Music classes\PianoKey.cs" />
     <Compile Include="Music classes\PitchValuePair.cs" />

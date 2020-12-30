@@ -67,9 +67,9 @@ namespace CreateSheetsFromVideo
             {
                 DrawTone(tone);
             }
-            foreach (double beatTime in save.BeatValues.GetBeatStartTimes(SheetsBuilder.BeatOffsetProportion))
+            foreach (double beatTime in save.BeatValues.GetBeatStartTimes())
             {
-                double beatOffset = SheetsBuilder.BeatOffsetProportion * save.BeatValues.Duration;
+                double beatOffset = SheetsBuilder.BeatOffsetPortion * save.BeatValues.Duration;
                 DrawBeatDash((int)((beatTime - save.OriginStartTime + beatOffset) * WidthPerSecond), true);
             }
             textBoxBeatDuration.Text = "Beat Dur = " + save.BeatValues.Duration.ToString(3);

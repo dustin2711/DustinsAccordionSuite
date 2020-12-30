@@ -24,6 +24,7 @@ using WMPLib;
 using System.Runtime.ExceptionServices;
 using System.Diagnostics;
 
+
 namespace CreateSheetsFromVideo
 {
     /// <summary>
@@ -42,10 +43,10 @@ namespace CreateSheetsFromVideo
 
         // Settings
         private const bool Save = false; // False = LoadMode, True = SaveMode
-        private const bool StartMusescoreAfterSaving = false;
+        private const bool StartMusescoreAfterLoading = false;
         private const ColorMode KeyColorMode = ColorMode.All; //Blue = left, green = right
         private double StartTime = 5;
-        private const double EndTime = 15;
+        private const double EndTime = 20;
         private const bool IsPlayingDefault = true;
         private const bool PlayRealtimeDefault = true;
         private const bool ShowVisualsDefault = true;
@@ -88,20 +89,21 @@ namespace CreateSheetsFromVideo
 
             if (!Save)
             {
-                //tones = new List<Tone>() { new Tone() { Pitch = Pitch.A, Color = Color.Red } };
-                //SaveTones(tonesPath);
-                //var loaded = LoadTones(tonesPath);
-
+                // Load SheetSave and draw
                 save = LoadSheetSave(SheetSavePath);
+                save.BeatValues.ApplyOffset(SheetsBuilder.BeatOffsetPortion);
                 DrawSheetSave(save);
 
-                // Build sheets and save
+                // Start SheetsBuilder and save result
                 SheetsBuilder builder = new SheetsBuilder(save, Path.GetFileNameWithoutExtension(VideoPath));
                 string savePath = Path.ChangeExtension(VideoPath, ".musicxml");
                 builder.SaveAsFile(savePath);
 
                 // Open 
-                Helper.OpenWithDefaultProgram(savePath);
+                if (StartMusescoreAfterLoading)
+                {
+                    Helper.OpenWithDefaultProgram(savePath);
+                }
 
                 //Load += (s, e) => Close();
             }
@@ -532,7 +534,7 @@ namespace CreateSheetsFromVideo
                             DrawTone(activeTone);
                             needToInvalidate = true;
 
-                            var times = save.BeatValues.GetBeatStartTimes(0);
+                            var times = save.BeatValues.GetBeatStartTimes();
                             double hit = times.FirstOrDefault(time => time < CurrentTime && CurrentTime < time + save.BeatValues.Duration);
                             int number = times.IndexOf(hit);
                             labelBeatNumber.Text = "Beat: " + number;
@@ -703,10 +705,10 @@ namespace CreateSheetsFromVideo
                 for (int index = 0; index < blackKeys.Count; index++)
                 {
                     // These black key distances clearly identify the first Cis
-                    if (blackKeys[index].DistanceToNext.IsAboutRel(shortDistance)
-                        && blackKeys[index + 1].DistanceToNext.IsAboutRel(longDistance)
-                        && blackKeys[index + 2].DistanceToNext.IsAboutRel(shortDistance)
-                        && blackKeys[index + 3].DistanceToNext.IsAboutRel(shortDistance))
+                    if (blackKeys[index].DistanceToNext.IsAboutRelative(shortDistance)
+                        && blackKeys[index + 1].DistanceToNext.IsAboutRelative(longDistance)
+                        && blackKeys[index + 2].DistanceToNext.IsAboutRelative(shortDistance)
+                        && blackKeys[index + 3].DistanceToNext.IsAboutRelative(shortDistance))
                     {
                         // Set ToneHeights of black keys
                         SetBlackKeyToneHeights(blackKeys, index);
