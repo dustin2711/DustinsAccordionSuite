@@ -83,30 +83,37 @@ namespace CreateSheetsFromVideo
 
         private static WhitePitch GetWhitePitch(Pitch pitch)
         {
-            switch (pitch)
+            // Parse first letter to WhitePitch
+            if (Enum.TryParse(pitch.ToString().Substring(0, 1), out WhitePitch whitePitch))
             {
-                case Pitch.C:
-                case Pitch.Cis:
-                    return WhitePitch.C;
-                case Pitch.D:
-                    return WhitePitch.D;
-                case Pitch.Es:
-                case Pitch.E:
-                    return WhitePitch.E;
-                case Pitch.F:
-                case Pitch.Fis:
-                    return WhitePitch.F;
-                case Pitch.G:
-                case Pitch.Gis:
-                    return WhitePitch.G;
-                case Pitch.A:
-                    return WhitePitch.A;
-                case Pitch.Bes:
-                case Pitch.B:
-                    return WhitePitch.B;
-                default:
-                    throw new Exception();
+                return whitePitch;
             }
+            else throw new Exception();
+
+            //switch (pitch)
+            //{
+            //    case Pitch.C:
+            //    case Pitch.Cis:
+            //        return WhitePitch.C;
+            //    case Pitch.D:
+            //        return WhitePitch.D;
+            //    case Pitch.Es:
+            //    case Pitch.E:
+            //        return WhitePitch.E;
+            //    case Pitch.F:
+            //    case Pitch.Fis:
+            //        return WhitePitch.F;
+            //    case Pitch.G:
+            //    case Pitch.Gis:
+            //        return WhitePitch.G;
+            //    case Pitch.A:
+            //        return WhitePitch.A;
+            //    case Pitch.Bes:
+            //    case Pitch.B:
+            //        return WhitePitch.B;
+            //    default:
+            //        throw new Exception();
+            //}
         }
 
         public static ToneHeight GetPreviousWhite(ToneHeight toneHeight)

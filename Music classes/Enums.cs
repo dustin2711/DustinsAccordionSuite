@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MusicXmlSchema;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -71,5 +72,34 @@ namespace CreateSheetsFromVideo
         G,
         A,
         B,
+    }
+
+    public static class PitchExtensions
+    {
+        public static int GetAlter(this Pitch pitch)
+        {
+            string pitchString = pitch.ToString();
+            if (pitchString.Contains("is"))
+            {
+                return 1;
+            }
+            else if (pitchString.Contains("es"))
+            {
+                return -1;
+            }
+            else return 0;
+        }
+
+        public static Step GetStep(this Pitch pitch)
+        {
+            if (Enum.TryParse(pitch.ToString().Substring(0, 1), out Step step))
+            {
+                return step;
+            }
+            else
+            {
+                throw new Exception("Could not get Step-enum from pitch");
+            }
+        }
     }
 }

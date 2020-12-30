@@ -36,7 +36,7 @@
             this.textBoxLog = new System.Windows.Forms.TextBox();
             this.textBoxTonesActiveLeft = new System.Windows.Forms.TextBox();
             this.textBoxTonesPastLeft = new System.Windows.Forms.TextBox();
-            this.buttonInit = new System.Windows.Forms.Button();
+            this.buttonReset = new System.Windows.Forms.Button();
             this.buttonClearNotesActive = new System.Windows.Forms.Button();
             this.buttonClearNotesPast = new System.Windows.Forms.Button();
             this.checkBoxRealtime = new System.Windows.Forms.CheckBox();
@@ -68,6 +68,10 @@
             this.labelActiveTones = new System.Windows.Forms.Label();
             this.labelPastTones = new System.Windows.Forms.Label();
             this.labelLog = new System.Windows.Forms.Label();
+            this.textBoxBeatDuration = new System.Windows.Forms.TextBox();
+            this.checkBoxSave = new System.Windows.Forms.CheckBox();
+            this.buttonSetNotebarStart = new System.Windows.Forms.Button();
+            this.labelBeatNumber = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.bindingNavigator1)).BeginInit();
             this.bindingNavigator1.SuspendLayout();
@@ -128,14 +132,14 @@
             this.textBoxTonesPastLeft.Size = new System.Drawing.Size(145, 191);
             this.textBoxTonesPastLeft.TabIndex = 7;
             // 
-            // buttonInit
+            // buttonReset
             // 
-            this.buttonInit.Location = new System.Drawing.Point(8, 25);
-            this.buttonInit.Name = "buttonInit";
-            this.buttonInit.Size = new System.Drawing.Size(87, 32);
-            this.buttonInit.TabIndex = 8;
-            this.buttonInit.Text = "Reset";
-            this.buttonInit.UseVisualStyleBackColor = true;
+            this.buttonReset.Location = new System.Drawing.Point(8, 25);
+            this.buttonReset.Name = "buttonReset";
+            this.buttonReset.Size = new System.Drawing.Size(87, 32);
+            this.buttonReset.TabIndex = 8;
+            this.buttonReset.Text = "Reset";
+            this.buttonReset.UseVisualStyleBackColor = true;
             // 
             // buttonClearNotesActive
             // 
@@ -344,6 +348,7 @@
             // 
             this.bindingNavigatorPositionItem.AccessibleName = "Position";
             this.bindingNavigatorPositionItem.AutoSize = false;
+            this.bindingNavigatorPositionItem.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.bindingNavigatorPositionItem.Name = "bindingNavigatorPositionItem";
             this.bindingNavigatorPositionItem.Size = new System.Drawing.Size(50, 23);
             this.bindingNavigatorPositionItem.Text = "0";
@@ -390,7 +395,7 @@
             // 
             this.pictureBoxNotes.Location = new System.Drawing.Point(0, 558);
             this.pictureBoxNotes.Name = "pictureBoxNotes";
-            this.pictureBoxNotes.Size = new System.Drawing.Size(1920, 201);
+            this.pictureBoxNotes.Size = new System.Drawing.Size(1920, 285);
             this.pictureBoxNotes.TabIndex = 25;
             this.pictureBoxNotes.TabStop = false;
             // 
@@ -421,11 +426,50 @@
             this.labelLog.TabIndex = 28;
             this.labelLog.Text = "Log";
             // 
+            // textBoxBeatDuration
+            // 
+            this.textBoxBeatDuration.Location = new System.Drawing.Point(0, 836);
+            this.textBoxBeatDuration.Name = "textBoxBeatDuration";
+            this.textBoxBeatDuration.Size = new System.Drawing.Size(100, 20);
+            this.textBoxBeatDuration.TabIndex = 29;
+            // 
+            // checkBoxSave
+            // 
+            this.checkBoxSave.AutoSize = true;
+            this.checkBoxSave.Location = new System.Drawing.Point(380, 6);
+            this.checkBoxSave.Name = "checkBoxSave";
+            this.checkBoxSave.Size = new System.Drawing.Size(51, 17);
+            this.checkBoxSave.TabIndex = 30;
+            this.checkBoxSave.Text = "Save";
+            this.checkBoxSave.UseVisualStyleBackColor = true;
+            // 
+            // buttonSetNotebarStart
+            // 
+            this.buttonSetNotebarStart.Location = new System.Drawing.Point(0, 798);
+            this.buttonSetNotebarStart.Name = "buttonSetNotebarStart";
+            this.buttonSetNotebarStart.Size = new System.Drawing.Size(87, 32);
+            this.buttonSetNotebarStart.TabIndex = 31;
+            this.buttonSetNotebarStart.Text = "Set start";
+            this.buttonSetNotebarStart.UseVisualStyleBackColor = true;
+            // 
+            // labelBeatNumber
+            // 
+            this.labelBeatNumber.AutoSize = true;
+            this.labelBeatNumber.Location = new System.Drawing.Point(5, 782);
+            this.labelBeatNumber.Name = "labelBeatNumber";
+            this.labelBeatNumber.Size = new System.Drawing.Size(66, 13);
+            this.labelBeatNumber.TabIndex = 32;
+            this.labelBeatNumber.Text = "BeatNumber";
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(2037, 804);
+            this.ClientSize = new System.Drawing.Size(2037, 855);
+            this.Controls.Add(this.labelBeatNumber);
+            this.Controls.Add(this.buttonSetNotebarStart);
+            this.Controls.Add(this.checkBoxSave);
+            this.Controls.Add(this.textBoxBeatDuration);
             this.Controls.Add(this.labelLog);
             this.Controls.Add(this.labelPastTones);
             this.Controls.Add(this.labelActiveTones);
@@ -445,7 +489,7 @@
             this.Controls.Add(this.checkBoxRealtime);
             this.Controls.Add(this.buttonClearNotesPast);
             this.Controls.Add(this.buttonClearNotesActive);
-            this.Controls.Add(this.buttonInit);
+            this.Controls.Add(this.buttonReset);
             this.Controls.Add(this.textBoxTonesPastLeft);
             this.Controls.Add(this.textBoxTonesActiveLeft);
             this.Controls.Add(this.textBoxLog);
@@ -474,7 +518,7 @@
         private System.Windows.Forms.TextBox textBoxLog;
         private System.Windows.Forms.TextBox textBoxTonesActiveLeft;
         private System.Windows.Forms.TextBox textBoxTonesPastLeft;
-        private System.Windows.Forms.Button buttonInit;
+        private System.Windows.Forms.Button buttonReset;
         private System.Windows.Forms.Button buttonClearNotesActive;
         private System.Windows.Forms.Button buttonClearNotesPast;
         private System.Windows.Forms.CheckBox checkBoxRealtime;
@@ -506,6 +550,10 @@
         private System.Windows.Forms.Label labelActiveTones;
         private System.Windows.Forms.Label labelPastTones;
         private System.Windows.Forms.Label labelLog;
+        private System.Windows.Forms.TextBox textBoxBeatDuration;
+        private System.Windows.Forms.CheckBox checkBoxSave;
+        private System.Windows.Forms.Button buttonSetNotebarStart;
+        private System.Windows.Forms.Label labelBeatNumber;
     }
 }
 

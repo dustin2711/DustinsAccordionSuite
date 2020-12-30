@@ -22,14 +22,14 @@ using YoutubeExtractor;
 using VideoLibrary;
 using WMPLib;
 using System.Runtime.ExceptionServices;
+using System.Diagnostics;
 
 namespace CreateSheetsFromVideo
 {
     /// <summary>
     ///   ToDo:
-    ///   - Lange Note und währenddessen viele kleine
-    ///   - NORMALIZE Tonhöhe (aktuell schweben Noten krank weit oben)
-    ///   - Warum spielt Musescore keinen Ton ab?  
+    ///   [ ] Lange Note und währenddessen viele kleine
+    ///   [ ] In Voices Noten bei Bedarf langziehen um Lücken zu füllen?
     /// </summary>
     public partial class MainForm : Form
     {
@@ -41,11 +41,12 @@ namespace CreateSheetsFromVideo
         private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow 360.mp4";
 
         // Settings
-        private const AppMode Mode = AppMode.Load;
+        private const bool Save = false; // False = LoadMode, True = SaveMode
+        private const bool StartMusescoreAfterSaving = false;
         private const ColorMode KeyColorMode = ColorMode.All; //Blue = left, green = right
-        private const double StartTime = 5.0;
-        private const double EndTime = 25;
-        private const bool IsPlayingDefault = false;
+        private double StartTime = 5;
+        private const double EndTime = 15;
+        private const bool IsPlayingDefault = true;
         private const bool PlayRealtimeDefault = true;
         private const bool ShowVisualsDefault = true;
         private const bool PrintHandledTonesAgain = true;
@@ -58,37 +59,49 @@ namespace CreateSheetsFromVideo
         private VideoFileReader frameViewer = new VideoFileReader();
         private Bitmap frame;
 
+        private SheetSave save;
         private List<Tone> tonesActive = new List<Tone>();
         private List<Tone> tonesPast = new List<Tone>();
         private List<PianoKey> pianoKeys;
 
         // For manual inserting beat beginnings
-        private List<BeatTime> beatTimes = new List<BeatTime>();
+        private List<BeatHit> beatTimes = new List<BeatHit>();
 
-        private bool IsRightHand(Tone tone)
+        /// <summary>
+        ///   hue smaller 150 (green)? [R=0, G=120, B=240]
+        /// </summary>
+        public static bool IsRightHand(Tone tone)
         {
-            return tone.Color.GetHue() < 150;
+            return tone.Color.GetHue() < 150; 
         }
+
+        private static MainForm Instance;
 
         public MainForm()
         {
+            Instance = this;
             //SaveYoutubeVideo(@"https://www.youtube.com/watch?v=lPtl-gBpGG8");
 
             InitializeComponent();
             InitializeUI();
             InitializeNoteBar();
 
-            if (Mode == AppMode.Load)
+            if (!Save)
             {
                 //tones = new List<Tone>() { new Tone() { Pitch = Pitch.A, Color = Color.Red } };
                 //SaveTones(tonesPath);
                 //var loaded = LoadTones(tonesPath);
 
-                SheetSave save = LoadSheetSave(SheetSavePath);
-                DrawTones(save.Tones);
+                save = LoadSheetSave(SheetSavePath);
+                DrawSheetSave(save);
 
-                SheetBuilder builder = new SheetBuilder(LogLine, save, Path.GetFileNameWithoutExtension(VideoPath));
-                builder.SaveAsFile(Path.ChangeExtension(VideoPath, ".musicxml"));
+                // Build sheets and save
+                SheetsBuilder builder = new SheetsBuilder(save, Path.GetFileNameWithoutExtension(VideoPath));
+                string savePath = Path.ChangeExtension(VideoPath, ".musicxml");
+                builder.SaveAsFile(savePath);
+
+                // Open 
+                Helper.OpenWithDefaultProgram(savePath);
 
                 //Load += (s, e) => Close();
             }
@@ -153,28 +166,47 @@ namespace CreateSheetsFromVideo
             }
         }
 
+        // Is done once per startup
         private void InitializeUI()
         {
+            checkBoxSave.Checked = Save;
             checkBoxRealtime.Checked = PlayRealtimeDefault;
             checkBoxShowVisuals.Checked = ShowVisualsDefault;
             textBoxResetTime.Text = StartTime.ToString();
 
-            buttonInit.Click += (s, e) => InitProgramm();
+            buttonReset.Click += (s, e) => ResetProgramm();
             buttonPlay.Click += (s, e) => PlayPause();
             buttonNextFrame.Click += (s, e) => PlayNextFrameMediaPlayer();
             buttonPreviousFrame.Click += (s, e) => PlayPreviousFrameMediaPlayer();
             buttonClearNotesPast.Click += (s, e) => ClearNotesPast();
             buttonClearNotesActive.Click += (s, e) => textBoxTonesActiveLeft.Clear();
+            buttonSetNotebarStart.Click += (s, e) => ResetNotebar();
             textBoxJumpTo.KeyDown += TextBoxJumpTo_KeyDown;
             buttonClearBeatTimes.Click += (s, e) => ClearBeatTimes();
             KeyPreview = true;
             KeyDown += MainForm_KeyDown;
         }
 
-        private void InitProgramm()
+        private void ResetNotebar()
+        {
+            tonesActive.Clear();
+            StartTime = CurrentTime;
+            InitializeNoteBar();
+        }
+
+        /// <summary>
+        ///   Bring video to StartTime, clear lists and resets textBoxes
+        /// </summary>
+        private void ResetProgramm()
         {
             InitVideoPlayerAndFrameViewer(VideoPath);
+
             InitializeNoteBar();
+            if (!checkBoxSave.Checked)
+            {
+                DrawSheetSave(save);
+            }
+            //ResetProgress();
 
             // Clear lists
             pianoKeys.Clear();
@@ -294,10 +326,10 @@ namespace CreateSheetsFromVideo
             }
         }
 
-        private void InsertBeat(bool mainBeat)
+        private void InsertBeat(bool isMainBeat)
         {
-            beatTimes.Add(new BeatTime(mainBeat, CurrentTime));
-            DrawBeatDash(mainBeat);
+            beatTimes.Add(new BeatHit(isMainBeat, CurrentTime));
+            DrawBeatDash(GetDrawPositionX(CurrentTime), isMainBeat);
         }
 
         /// <summary>
@@ -305,7 +337,10 @@ namespace CreateSheetsFromVideo
         /// </summary>
         private void Evaluate()
         {
-            SaveSheets(SheetSavePath);
+            if (checkBoxSave.Checked)
+            {
+                SaveSheets(SheetSavePath);
+            }
             MessageBox.Show("Saved tones to " + SheetSavePath);
             //Close();
         }
@@ -320,8 +355,8 @@ namespace CreateSheetsFromVideo
             }
 
             // Set UI
-            Text = $"{CurrentTime.ToShortString()} / {(frameViewer.FrameCount * FrameDuration)} ({frameIndex})";
-            textBoxJumpTo.Text = CurrentTime.ToShortString();
+            base.Text = $"{Extensions.ToString(CurrentTime)} / {(frameViewer.FrameCount * FrameDuration)} ({frameIndex})";
+            textBoxJumpTo.Text = Extensions.ToString(CurrentTime);
             buttonPlay.Text = isPlaying ? "Pause" : "Play";
         }
 
@@ -496,13 +531,19 @@ namespace CreateSheetsFromVideo
                             // Draw tone
                             DrawTone(activeTone);
                             needToInvalidate = true;
+
+                            var times = save.BeatValues.GetBeatStartTimes(0);
+                            double hit = times.FirstOrDefault(time => time < CurrentTime && CurrentTime < time + save.BeatValues.Duration);
+                            int number = times.IndexOf(hit);
+                            labelBeatNumber.Text = "Beat: " + number;
                         }
                     }
                 }
             }
 
-            if (needToInvalidate)
+            if (true) //needToInvalidate)
             {
+                DrawProgress();
                 pictureBoxNotes.Invalidate();
             }
 
@@ -517,7 +558,7 @@ namespace CreateSheetsFromVideo
                     foreach (Tone tone in tonesActive)
                     {
                         TextBox textBox = tone.Color.GetHue() > 190 ? textBoxTonesActiveLeft : textBoxTonesRightActive;
-                        textBox.AppendText(tone.StartTime.ToShortString() + " - " + tone.EndTime.ToShortString() + ": " + tone.Pitch + Environment.NewLine);
+                        textBox.AppendText(Extensions.ToString(tone.StartTime) + " - " + Extensions.ToString(tone.EndTime) + ": " + tone.Pitch + Environment.NewLine);
                     }
 
                     // Previous tones
@@ -526,7 +567,7 @@ namespace CreateSheetsFromVideo
                     foreach (Tone tone in tonesPast.OrderByDescending(it => it.StartTime).Take(15))
                     {
                         TextBox textBox = tone.Color.GetHue() > 190 ? textBoxTonesPastLeft : textBoxTonesRight;
-                        textBox.AppendText(tone.StartTime.ToShortString() + " - " + tone.EndTime.ToShortString() + ": " + tone.Pitch + Environment.NewLine);
+                        textBox.AppendText(Extensions.ToString(tone.StartTime) + " - " + Extensions.ToString(tone.EndTime) + ": " + tone.Pitch + Environment.NewLine);
                     }
                 });
             }
@@ -762,25 +803,25 @@ namespace CreateSheetsFromVideo
             }
         }
 
-        private void LogLine(object text)
+        public static void LogLine(object text)
         {
             Log(text + Environment.NewLine);
         }
 
-        private void Log(object text)
+        public static void Log(object text)
         {
-            if (InvokeRequired)
+            if (Instance.InvokeRequired)
             {
-                Invoke(new Action(() => Log(text)));
+                Instance.Invoke(new Action(() => Log(text)));
                 return;
             }
 
-            if (textBoxLog.TextLength > 500)
+            if (Instance.textBoxLog.TextLength > 500)
             {
-                textBoxLog.Clear();
+                Instance.textBoxLog.Clear();
             }
 
-            textBoxLog.AppendText(DateTime.Now.ToString("hh:mm:ss") + ":  " + text.ToString());
+            Instance.textBoxLog.AppendText(DateTime.Now.ToString("hh:mm:ss") + ":  " + text.ToString());
         }
 
         private readonly static Dictionary<Pitch, Color> ColorForPitchDict = new Dictionary<Pitch, Color>()
@@ -804,7 +845,7 @@ namespace CreateSheetsFromVideo
 
 
     /// <summary>
-    ///   Represents a horizontal line with all light and dark keyboard keys and mathematical stuff
+    ///   Represents a horizontal line of an image with all light and dark keyboard keys and mathematical stuff
     /// </summary>
     public class LineWithStatistics
     {
@@ -828,7 +869,7 @@ namespace CreateSheetsFromVideo
 
         public override string ToString()
         {
-            return $"Y = {Y}, Brightness = {MeanBrightness.ToShortString()}";
+            return $"Y = {Y}, Brightness = {Extensions.ToString(MeanBrightness)}";
         }
     }
 }

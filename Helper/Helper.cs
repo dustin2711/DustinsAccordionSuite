@@ -40,5 +40,13 @@ namespace CreateSheetsFromVideo
         {
             return Color.FromArgb(brightness, brightness, brightness);
         }
+
+        public static void OpenWithDefaultProgram(string path, string arguments = "")
+        {
+            Process fileopener = new Process();
+            fileopener.StartInfo.FileName = "explorer";
+            fileopener.StartInfo.Arguments = $"\"{path}\" {arguments}";
+            fileopener.Start();
+        }
     }
 }

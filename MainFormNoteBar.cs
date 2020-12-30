@@ -7,23 +7,28 @@ namespace CreateSheetsFromVideo
     {
         private static Brush BrushGray= new SolidBrush(Color.DarkGray);
         private static Brush BrushBlack = new SolidBrush(Color.Black);
+        private static Brush BrushOrange = new SolidBrush(Color.Orange);
+        private static Brush BrushTransparent = new SolidBrush(Color.Transparent);
         private static Pen PenBlack = new Pen(BrushBlack, 2);
         private static Pen PenGray = new Pen(BrushGray, 2);
         private List<int> lineHeights = new List<int>();
 
         private const float WidthPerSecond = 80f;
         private const int LineGap = 12;
-        private const int FirstLineDistanceFromBorder = 3 * LineGap;
+        private const int FirstLineDistanceFromBorder = 7 * LineGap;
 
-        private int CurrentDrawPositionX => (int)((CurrentTime - StartTime) * WidthPerSecond);
+        private float GetDrawPositionX(double time)
+        {
+            return (float)((time - StartTime) * WidthPerSecond);
+        }
 
-        private void DrawBeatDash(bool mainBeat)
+        private void DrawBeatDash(float drawPosition, bool isMainBeat)
         {
             using (Graphics graphics = Graphics.FromImage(pictureBoxNotes.Image))
             {
-                graphics.DrawLine(mainBeat ? PenBlack : PenGray,
-                    new Point(CurrentDrawPositionX, 0),
-                    new Point(CurrentDrawPositionX, pictureBoxNotes.Height));
+                graphics.DrawLine(isMainBeat ? PenBlack : PenGray,
+                    new PointF(drawPosition, 0),
+                    new PointF(drawPosition, pictureBoxNotes.Height));
             }
         }
 
@@ -56,39 +61,41 @@ namespace CreateSheetsFromVideo
             }
         }
 
-        private void DrawTones(List<Tone> tones)
+        private void DrawSheetSave(SheetSave save)
         {
-            foreach (Tone tone in tones)
+            foreach (Tone tone in save.Tones)
             {
                 DrawTone(tone);
             }
+            foreach (double beatTime in save.BeatValues.GetBeatStartTimes(SheetsBuilder.BeatOffsetProportion))
+            {
+                double beatOffset = SheetsBuilder.BeatOffsetProportion * save.BeatValues.Duration;
+                DrawBeatDash((int)((beatTime - save.OriginStartTime + beatOffset) * WidthPerSecond), true);
+            }
+            textBoxBeatDuration.Text = "Beat Dur = " + save.BeatValues.Duration.ToString(3);
         }
 
-        /// <summary>
-        ///   Is calibrated on octave = 7
-        /// </summary>
         private void DrawTone(Tone tone)
         {
-            int GetDrawingHeight(ToneHeight toneHeight)
-            {
-                // The higher the key number
-                int keyNumber = toneHeight.GetKeyNumber();
-                int offset = (int)((51 - keyNumber) * 0.5 * LineGap); // 51 * 0.5 * 12
-                //Log(toneHeight + ": " + keyNumber + " (" + (IsRightHand(tone) ? "R" : "L") + ", " + offset + ")");
-                return FirstLineDistanceFromBorder + offset;
-            }
+            const int KeyOffset = 51;
+            float width = (float)(tone.Duration * WidthPerSecond); // Note width in pixels
+            float drawingPosX = GetDrawPositionX(tone.EndTime) - width;
+            int keyNumber = tone.ToneHeight.GetKeyNumber();
+            string debugString = tone.ToneHeight + " => " + keyNumber;
+            float drawingPosY = FirstLineDistanceFromBorder + (KeyOffset - tone.ToneHeight.GetKeyNumber()) * 0.5f * LineGap;
 
             using (Graphics graphics = Graphics.FromImage(pictureBoxNotes.Image))
             {
-                float width = (float)(tone.Duration * WidthPerSecond); // Note width in pixels
-                PointF position = new PointF( // e.g. 40|160
-                        (int)((tone.EndTime - StartTime) * WidthPerSecond),
-                        GetDrawingHeight(tone.ToneHeight));
-                SizeF size = new SizeF(width, LineGap); // e.g. 80|14
-                graphics.DrawEllipse(PenBlack, new RectangleF(position, size));
-                graphics.FillEllipse(new SolidBrush(tone.Color), new RectangleF(position, size));
+                RectangleF rect = new RectangleF(
+                    x: drawingPosX,
+                    y: drawingPosY,
+                    width: width,
+                    height: LineGap);// * 0.84f);
+                graphics.DrawEllipse(PenBlack, rect);
+                graphics.FillEllipse(new SolidBrush(tone.Color), rect);
 
-                PointF midPosition = new PointF(position.X, position.Y + 0.5f * LineGap);
+                // Draw dash for *es and * is
+                PointF midPosition = new PointF(drawingPosX, drawingPosY + 0.5f * LineGap);
                 switch (tone.Pitch.Alter())
                 {
                     case 1:
@@ -100,7 +107,30 @@ namespace CreateSheetsFromVideo
                         graphics.DrawLine(PenBlack, midPosition, new PointF(midPosition.X + width, midPosition.Y));
                         break;
                 }
-                //Log("Pos = " + position + ", Size = " + size);
+            }
+        }
+
+        private void ResetProgress()
+        {
+            using (Graphics graphics = Graphics.FromImage(pictureBoxNotes.Image))
+            {
+                graphics.FillRectangle(BrushTransparent,
+                    x: 0.5f * pictureBoxNotes.Width,
+                    y: pictureBoxNotes.Height - 2,
+                    width: pictureBoxNotes.Width,
+                    height: 2);
+            }
+        }
+
+        private void DrawProgress()
+        {
+            using (Graphics graphics = Graphics.FromImage(pictureBoxNotes.Image))
+            {
+                graphics.FillRectangle(BrushOrange,
+                    x: GetDrawPositionX(CurrentTime),// + save.BeatDuration),
+                    y: pictureBoxNotes.Height - 2,
+                    width: 2, 
+                    height: 2);
             }
         }
     }

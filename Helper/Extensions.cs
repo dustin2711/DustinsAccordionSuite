@@ -11,6 +11,17 @@ namespace CreateSheetsFromVideo
 
     public static class Extensions
     {
+        public static bool None<T>(this IEnumerable<T> source, Func<T, bool> predicate)
+        {
+            return !source.Any(predicate);
+        }
+
+        public static bool First<T>(this IEnumerable<T> source, Func<T, bool> predicate, out T item)
+        {
+            item = source.FirstOrDefault(predicate);
+            return item != null;
+        }
+
         public static int Alter(this Pitch pitch)
         {
             if (new Pitch[] { Pitch.Cis, Pitch.Fis, Pitch.Gis}.Contains(pitch))
@@ -26,13 +37,8 @@ namespace CreateSheetsFromVideo
                 return 0;
             }
         }
-
-        public static string RemoveDigits(this string text)
-        {
-            return new string(text.Where(c => c < '0' || c > '9').ToArray());
-        }
-
-        public static string ToShortString(this double value, int decimals = 2)
+       
+        public static string ToString(this double value, int decimals = 2)
         {
             return value.ToString("0." + new string('0', decimals));
         }
@@ -64,6 +70,9 @@ namespace CreateSheetsFromVideo
             }
         }
 
+        /// <summary>
+        ///   Removes and returns item at the given index.
+        /// </summary>
         public static T Pop<T>(this List<T> list, int index)
         {
             T item = list[index];
