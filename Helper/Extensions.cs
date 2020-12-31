@@ -174,28 +174,32 @@ namespace CreateSheetsFromVideo
             return element != null;
         }
 
-        public static T Next<T>(this T source) where T : struct
+        public static T Next<T>(this T value) where T : struct
         {
             if (!typeof(T).IsEnum)
             {
                 throw new ArgumentException(string.Format("Argument {0} is not an Enum", typeof(T).FullName));
             }
 
-            T[] array = (T[])Enum.GetValues(source.GetType());
-            int j = Array.IndexOf(array, source) + 1;
-            return (j == array.Length) ? array[0] : array[j];
+            T[] array = (T[])Enum.GetValues(value.GetType());
+            int index = Array.IndexOf(array, value) + 1;
+            return (index == array.Length) 
+                ? array[0] : 
+                array[index];
         }
 
-        public static T Previous<T>(this T source) where T : struct
+        public static T Previous<T>(this T value) where T : struct
         {
             if (!typeof(T).IsEnum)
             {
                 throw new ArgumentException(string.Format("Argument {0} is not an Enum", typeof(T).FullName));
             }
 
-            T[] array = (T[])Enum.GetValues(source.GetType());
-            int j = Array.IndexOf(array, source) - 1;
-            return (j == -1) ? array[array.Length - 1] : array[j];
+            T[] array = (T[])Enum.GetValues(value.GetType());
+            int index = Array.IndexOf(array, value) - 1;
+            return (index == -1) 
+                ? array[array.Length - 1] 
+                : array[index];
         }
 
         public static void CopyFrom(this Bitmap bitmap, Bitmap toCopy)

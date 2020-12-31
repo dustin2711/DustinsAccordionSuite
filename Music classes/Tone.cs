@@ -9,8 +9,6 @@ using System.Xml.Serialization;
 
 namespace CreateSheetsFromVideo
 {
-    public enum Dotting { None, Single, Double, PlusQuarter, IsZero }
-
     public enum Hand { Undefined, Left, Right }
 
     [Serializable]

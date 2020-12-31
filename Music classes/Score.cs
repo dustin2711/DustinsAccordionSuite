@@ -5,25 +5,52 @@ using System.Linq;
 
 namespace CreateSheetsFromVideo
 {
-    public class Score
+    public class SingleInstance<T> where T : SingleInstance<T>
     {
-        public List<Note> AllNotes => Beats.SelectMany(beat => beat.Notes).OrderBy(note => note.StartTime).ToList();
+        public T Instance;
+
+        protected SingleInstance()
+        {
+            Instance = this as T;
+        }
+    }
+
+    public class Score : SingleInstance<Score>
+    {
+        public const double MinimumPortion = 1.0 / 16;
+        public const double FrameLength = 1.0 / 30;
+        public const double MaxFrameDeltaToAddToSameVoice = 1.5;
+        /// <summary>
+        ///   Tolerance for merging tones and adding tones to same voice
+        /// </summary>
+        public static double PortionTolerance;
+
+        public string Name;
         public List<Beat> Beats = new List<Beat>();
         public BeatValues BeatValues;
 
-        public Score(SheetSave save)
+        public List<Note> AllNotes => Beats.SelectMany(beat => beat.AllBeatNotes).OrderBy(note => note.StartTime).ToList();
+
+        public Score(SheetSave save) : base()
         {
+            Name = save.Name;
             BeatValues = save.BeatValues;
+            PortionTolerance = MaxFrameDeltaToAddToSameVoice * FrameLength / BeatValues.Duration;
 
             GetLeftAndRightHandTones(save.Tones, out List<Tone> leftTonesUnmerged, out List<Tone> rightTonesUnmerged);
 
             Beats = CreateBeats(this, rightTonesUnmerged, BeatValues);
-            CreateParts();
 
             foreach (Beat beat in Beats)
             {
+                beat.CreateVoices();
                 beat.OptimizeNotePortions();
+                beat.MergeAgain();
+                beat.RemoveVoicesWithRestOnly();
             }
+
+            Debugger.Break();
+            var lookHere = Beats;
         }
 
         private static List<Beat> CreateBeats(Score score, List<Tone> tones, BeatValues beatValues)
@@ -36,7 +63,7 @@ namespace CreateSheetsFromVideo
             foreach (Tone tone in tones)
             {
                 // Get fitting beatNumber..
-                int beatNumber = beatTimes.FindIndex(it => it < tone.StartTime && tone.StartTime < it + beatValues.Duration); // can be -1 due to beatOffsetProportion!
+                int beatNumber = Beat.BeatOffset + beatTimes.FindIndex(it => it < tone.StartTime && tone.StartTime < it + beatValues.Duration); // can be -1 due to beatOffsetProportion!
                 // ..and try get beat..
                 Beat beat = beats.FirstOrDefault(it => it.Number == beatNumber);
                 if (beat == null)
@@ -47,7 +74,7 @@ namespace CreateSheetsFromVideo
                 }
 
                 Note note = new Note(beat, tone);
-                beat.Notes.Add(note);
+                beat.AllBeatNotes.Add(note);
             }
 
             /// Merge chords
@@ -59,7 +86,7 @@ namespace CreateSheetsFromVideo
                 Beat currentBeat = beats[i];
                 Beat nextBeat = beats[i + 1];
 
-                foreach (Note note in currentBeat.Notes.Where(note 
+                foreach (Note note in currentBeat.AllBeatNotes.Where(note 
                     => note.EndPortion > 1))
                 {
                     Note overhangNote = new Note(note)
@@ -69,63 +96,25 @@ namespace CreateSheetsFromVideo
                         Portion = note.EndPortion - 1,
                         Tiing = new Tiing(noteBefore: note)
                     };
-                    nextBeat.Notes.Add(overhangNote);
+                    nextBeat.AllBeatNotes.Add(overhangNote);
 
                     note.EndPortion = 1;
                     note.Tiing = new Tiing(noteAfter: overhangNote);
                 }
             }
 
-            return beats;
-        }
-
-        public void CreateParts()
-        {
-            foreach (Beat beat in Beats)
+            // Check for correct beats and correct startTimes
+            foreach (Beat beat in beats)
             {
-                // Iterate tones and group into voices
-                foreach (Note note in beat.Notes.OrderBy(it => it.StartPortion))
+                foreach (Note note in beat.AllBeatNotes.Where(note => 
+                    note.Beat != beat
+                    || note.StartTime < note.Beat.StartTime))
                 {
-                    if (note.Tiing?.NoteBefore != null)
-                    {
-                        /// Create part with same VoiceId as last beat
-                        Part Part = new Part(note.Tiing.NoteBefore.Part.VoiceId);
-                        beat.Parts.Add(Part);
-                        Part.Notes.Add(note.Tiing.NoteBefore);
-                        note.Part = Part;
-                    }
-                    else
-                    {
-                        // Voice with room for tone?
-                        if (beat.Parts.First(voice => note.StartPortion >= voice.Notes.Last().EndPortion, out Part fittingPart))
-                        {
-                            // Yes: Add to existing voice
-                            fittingPart.Notes.Add(note);
-                            note.Part = fittingPart;
-                        }
-                        else
-                        {
-                            // No: Create new voice
-                            for (int id = 1; true; id++)
-                            {
-                                if (beat.Parts.None(voice => voice.VoiceId == id))
-                                {
-                                    Part voice = new Part(id);
-                                    voice.Notes.Add(note);
-                                    note.Part = voice;
-                                    beat.Parts.Add(voice);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (note.Part == null)
-                    {
-                        Debugger.Break();
-                    }
-                } // foreach tone
+                    Debugger.Break();
+                }
             }
+
+            return beats;
         }
 
         private static void GetLeftAndRightHandTones(List<Tone> tones, out List<Tone> leftHandTones, out List<Tone> rightHandTones)
@@ -191,10 +180,9 @@ namespace CreateSheetsFromVideo
         /// </summary>
         private static void MergeChords(List<Beat> beats)
         {
-            List<Note> notes = beats.SelectMany(beat => beat.Notes).OrderBy(note => note.StartTime).ToList();
+            List<Note> notes = beats.SelectMany(beat => beat.AllBeatNotes).OrderBy(note => note.StartTime).ToList();
 
-            const double MaxAbsoluteTimeDelta = 0.040; // in seconds (0.040 ~ 2.5 Frames)
-            const double MaxRelativeDelta = 0.2;
+            const double MaxRelativeDelta = 0.3;
 
             List<Note> chordNotes = new List<Note>();
 
@@ -207,8 +195,8 @@ namespace CreateSheetsFromVideo
                 {
                     Note chordNote = notes[index];
                     // Same starttime, endtime & duration?
-                    if (chordNote.StartTime.IsAboutAbsolute(mainNote.StartTime, MaxAbsoluteTimeDelta)
-                        && chordNote.EndTime.IsAboutAbsolute(mainNote.EndTime, MaxAbsoluteTimeDelta)
+                    if (chordNote.StartPortion.IsAboutAbsolute(mainNote.StartPortion, PortionTolerance)
+                        && chordNote.EndPortion.IsAboutAbsolute(mainNote.EndPortion, PortionTolerance)
                         && chordNote.Duration.IsAboutRelative(mainNote.Duration, MaxRelativeDelta))
                     {
                         mainNote.ChordToneHeights.Add(chordNote.ToneHeight);
@@ -228,24 +216,31 @@ namespace CreateSheetsFromVideo
             foreach (Beat beat in beats)
             {
                 foreach (Note chordNote in chordNotes.Where(chordNote
-                    => beat.Notes.Contains(chordNote)))
+                    => beat.AllBeatNotes.Contains(chordNote)))
                 {
-                    beat.Notes.Remove(chordNote);
+                    beat.AllBeatNotes.Remove(chordNote);
                 }
             }
+        }
+
+        public override string ToString()
+        {
+            return $"{Name}: {Beats.Count} Beats (T={BeatValues.Duration.ToString(3)}) with {AllNotes.Count} Notes";
         }
     }
 
     public class Beat
     {
+        public const int BeatOffset = 1;
+
         public Score Score;
         public int Number;
-        public List<Note> Notes = new List<Note>();
-        public List<Part> Parts = new List<Part>();
+        public List<Note> AllBeatNotes = new List<Note>();
+        public List<Voice> Voices = new List<Voice>();
 
         public double Duration => Score.BeatValues.Duration;
-        public double StartTime => Score.BeatValues.FirstBeatStartTime + Number * Duration;
-        public double EndTime => Score.BeatValues.FirstBeatStartTime + (Number + 1) * Duration;
+        public double StartTime => Score.BeatValues.FirstBeatStartTime + (Number + BeatOffset - 2) * Duration; // + 0
+        public double EndTime => Score.BeatValues.FirstBeatStartTime + (Number + BeatOffset - 1) * Duration; // + 1
 
         public Beat(Score score, int number)
         {
@@ -253,13 +248,89 @@ namespace CreateSheetsFromVideo
             Number = number;
         }
 
+        public void CreateVoices() // Here happens a bug with wrong assignment
+        {
+            Voice AddVoice(int id, Note noteToAdd)
+            {
+                if (!Voices.TryGet(it => it.Id == id, out Voice voice))
+                {
+                    voice = new Voice(this, id);
+                    Voices.Add(voice);
+                }
+                voice.Notes.Add(noteToAdd);
+                return voice;
+            }
+
+            // Iterate tones and group into voices
+            AllBeatNotes = AllBeatNotes.OrderBy(it => it.StartPortion).ToList(); // Order
+            foreach (Note note in AllBeatNotes)
+            {
+                if (note.Tiing?.NoteBefore != null)
+                {
+                    //if (note.ToString() == "1: E7 5,159 to 5,219")
+                    //    Debugger.Break();
+                    // Create part with same VoiceId as last beat
+                    note.Voice = AddVoice(note.Tiing.NoteBefore.Voice.Id, note);
+                }
+                else
+                {
+                    // Voice with room for tone?
+                    if (Voices.First(voice => note.StartPortion >= voice.Notes.Last().EndPortion - Score.PortionTolerance, out Voice fittingPart))
+                    {
+                        // Yes: Add to existing voice
+                        fittingPart.Notes.Add(note);
+                        note.Voice = fittingPart;
+                    }
+                    else
+                    {
+                        // No: Create new voice
+                        for (int id = 0; true; id++)
+                        {
+                            if (Voices.None(voice => voice.Id == id))
+                            {
+                                note.Voice = AddVoice(id, note);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (note.Voice == null)
+                {
+                    Debugger.Break();
+                }
+
+            } // foreach note
+
+            // Check for same ids
+            List<int> ids = Voices.Select(voice => voice.Id).ToList();
+            if (ids.Count != ids.Distinct().Count())
+            {
+                Debugger.Break();
+            }
+
+            // Check if notes have correct beat
+            foreach (Voice voice in Voices)
+            {
+                foreach (Note note in voice.Notes)
+                {
+                    if (note.Beat != this)
+                    {
+                        Debugger.Break();
+                    }
+                }
+            }
+
+            Voices = Voices.OrderBy(voice => voice.Id).ToList();
+        }
+
         /// <summary>
-        ///   Optimizes the note portions for each part (e.g. 0.46 gets 0.50)
+        ///   Optimizes the note portions for each part (e.g. 0.46 becomes 0.50)
         /// </summary>
         public void OptimizeNotePortions()
         {
             // Make voice fit to 1/32 and fill with pauses
-            const double minimum = 1.0 / 32;
+            double minimum = Score.MinimumPortion;
 
             double GetRoundedPortion(double portion)
             {
@@ -267,28 +338,22 @@ namespace CreateSheetsFromVideo
                 return roundedPortion;
             }
 
-            List<Note> removedNotes = new List<Note>();
-
-            foreach (Part part in Parts)
+            foreach (Voice voice in Voices)
             {
-                //Debug
+                // Debug
                 List<Note> notesBeforeOptimizing = new List<Note>();
-                foreach (Note note in part.Notes)
+                foreach (Note note in voice.Notes)
                 {
-                    notesBeforeOptimizing.Add(new Note(note));
+                    notesBeforeOptimizing.Add(new Note(note)); // Temp copy
                 }
-                bool needToBreak = part.Notes.Count >= 6;
-                if (needToBreak)
+
+                if (Number == 6 && voice.Id == 3)
                 {
                     //Debugger.Break();
                 }
-                if (notesBeforeOptimizing.GetHashCode() == 1795329)
-                {
-
-                }
 
                 // FIRST NOTE
-                Note firstNote = part.Notes.First();
+                Note firstNote = voice.Notes.First();
                 // Gap to beatStart < minimum?
                 if (firstNote.StartPortion <= minimum)
                 {
@@ -300,14 +365,14 @@ namespace CreateSheetsFromVideo
                     // No : Insert rest and adapt noteStart
                     firstNote.StartPortion = GetRoundedPortion(firstNote.StartPortion);
                     Rest rest = new Rest(this, 0, firstNote.StartPortion);
-                    part.Notes.Insert(0, rest);
+                    voice.Notes.Insert(0, rest);
                 }
 
                 // NOTES INBETWEEN
-                for (int i = 0; i < part.Notes.Count - 1; i++)
+                for (int i = 0; i < voice.Notes.Count - 1; i++)
                 {
-                    Note note = part.Notes[i];
-                    Note nextNote = part.Notes[i + 1];
+                    Note note = voice.Notes[i];
+                    Note nextNote = voice.Notes[i + 1];
 
                     if (note is Rest || nextNote is Rest)
                     {
@@ -329,15 +394,15 @@ namespace CreateSheetsFromVideo
                         // No: Insert rest
                         double restStartPotion = GetRoundedPortion(note.EndPortion);
                         double restEndPotion = GetRoundedPortion(nextNote.StartPortion);
-                        part.Notes.Insert(i++, new Rest(this, restStartPotion, restEndPotion));
+                        Rest rest = new Rest(this, restStartPotion, restEndPotion);
+                        voice.Notes.Insert(i++, rest);
+                        note.EndPortion = restStartPotion;
+                        nextNote.StartPortion = restEndPotion;
                     }
-
-                    note.StartPortion = GetRoundedPortion(note.StartPortion);
-                    note.EndPortion = GetRoundedPortion(note.EndPortion);
                 }
 
                 // LAST NOTE
-                Note lastNote = part.Notes.Last();
+                Note lastNote = voice.Notes.Last();
                 // Gap to beatEnd < minimum? (Care: nextNote, not note)
                 if (1 - lastNote.EndPortion <= minimum)
                 {
@@ -348,46 +413,135 @@ namespace CreateSheetsFromVideo
                 {
                     // No: Add rest and adapt noteEnd
                     lastNote.EndPortion = GetRoundedPortion(lastNote.EndPortion);
-                    Rest rest = new Rest(this, 0, lastNote.EndPortion);
-                    part.Notes.Add(rest);
+                    Rest rest = new Rest(this, lastNote.EndPortion, 1);
+                    voice.Notes.Add(rest);
                 }
 
-                // Remove notes with portion = 1
-                foreach (Note note in part.Notes.Where(note => note.Duration == 0).ToArray())
+                // Remove notes with portion = 0
+                foreach (Note note in voice.Notes.Where(note => note.Portion == 0).ToArray())
                 {
                     MainForm.LogLine("Removing " + note);
-                    part.Notes.Remove(note);
-                    removedNotes.Add(note);
+                    voice.Notes.Remove(note);
+                    voice.RemovedNotes.Add(note);
                 }
 
                 // Sort all
                 List<Note> OrderByStart(ref List<Note> notes) => notes = notes.OrderBy(note => note.StartPortion).ToList();
                 OrderByStart(ref notesBeforeOptimizing);
-                OrderByStart(ref removedNotes);
-                OrderByStart(ref part.Notes);
+                OrderByStart(ref voice.RemovedNotes);
+                OrderByStart(ref voice.Notes);
 
-                var notesBefore = notesBeforeOptimizing;
-                var notesAfter = part.Notes;
-                var c = removedNotes;
-                // DEBUG HERE
-                foreach (var note in part.Notes)
-                {
-                    if (note.NoteLength.HasDeviation)
-                    {
-                        //Debugger.Break();
-                    }
-                }
-                if (needToBreak)
+                // Debug
+                //var notesBefore = notesBeforeOptimizing;
+                //var notesAfter = voice.Notes;
+                //var removed = removedNotes;
+
+                // Check for deviation
+                foreach (Note note in voice.Notes.Where(note => note.NoteLength.HasDeviation))
                 {
                     Debugger.Break();
                 }
-  
+            } // foreach voice
+
+            // Check for voices that are not complete
+            foreach (Voice voice in Voices)
+            {
+                double totalPortion = voice.Notes.Sum(note => note.Portion);
+                if (Math.Abs(totalPortion - 1) > 0.001)
+                {
+                    Debugger.Break();
+                }
+            }
+        }
+
+        public void MergeAgain()
+        {
+            for (int i = 0; i < Voices.Count; i++)
+            {
+                Voice voice = Voices[i];
+                for (int j = i + 1; j < Voices.Count; j++)
+                {
+                    Voice otherVoice = Voices[j];
+
+                    // Compare each voice with each other voice
+                    foreach (Note note in voice.Notes.Where(it => !(it is Rest)))
+                    {
+                        // Collect notes to remove
+                        List<Note> notesToReplace = new List<Note>();
+
+                        foreach (Note otherNote in otherVoice.Notes.Where(it => !(it is Rest)))
+                        {
+                            if (note.StartPortion.IsAboutAbsolute(otherNote.StartPortion, 0.001)
+                                && note.EndPortion.IsAboutAbsolute(otherNote.EndPortion, 0.001))
+                            {
+                                // Add and collect
+                                note.ChordToneHeights.Add(otherNote.ToneHeight);
+                                notesToReplace.Add(otherNote);
+                            }
+                        }
+
+                        // Replace by rest
+                        foreach (Note toReplace in notesToReplace.ToArray())
+                        {
+                            int indexToReplace = otherVoice.Notes.IndexOf(toReplace);
+                            otherVoice.Notes[indexToReplace] = new Rest(toReplace.Beat, toReplace.StartPortion, toReplace.EndPortion);
+                        }
+                    }
+                }
+            }
+
+        }
+
+
+        public void RemoveVoicesWithRestOnly()
+        {
+            // Remove voices with only rests..
+            foreach (Voice voice in Voices.Where(voice => voice.Notes.All(note => note is Rest)).ToArray())
+            {
+                if (Voices.Count > 1) //.. as long as minimum 1 voice remains
+                {
+                    Voices.Remove(voice);
+                }
+                else
+                {
+                    break;
+                }
             }
         }
 
         public override string ToString()
         {
-            return $"{StartTime.ToString(3)}-{EndTime.ToString(3)}: {Parts.Count} Voices with total {Notes.Count} Tones";
+            //return $"{StartTime.ToString(3)}-{EndTime.ToString(3)}: {Parts.Count} Voices with total {Notes.Count} Tones";
+            return $"{Number}: {Voices.Count} voices with {string.Join(", ", Voices.Select(p => p.Notes.Count))} tones";
+        }
+    }
+
+    /// <summary>
+    ///   A part of a beat with a unique VoiceId.
+    /// </summary>
+    [Serializable]
+    public class Voice
+    {
+        public Beat Beat;
+        public List<Note> Notes = new List<Note>();
+        public int Id;
+
+        public List<Note> RemovedNotes = new List<Note>();
+
+        protected Voice() { }
+
+        public Voice(Beat beat, int id)
+        {
+            Beat = beat;
+            Notes = new List<Note>();
+            Id = id;
+        }
+
+        public override string ToString()
+        {
+            string notesAsString = string.Join(", ", Notes.Select(note 
+                => $"{(note is Rest ? "Rest" : note.ToneHeightString)}({note.StartPortion.ToString(2)}-{note.EndPortion.ToString(2)}"));
+            return $"{Beat.Number}-{Id}: {Notes.Count} Notes: {notesAsString}";
         }
     }
 
@@ -498,29 +652,6 @@ namespace CreateSheetsFromVideo
         public override string ToString()
         {
             return $"Beats with {Duration}s, first {FirstBeatStartTime} to last {LastBeatStartTime}";
-        }
-    }
-
-    /// <summary>
-    ///   A part of a beat having a unique VoiceId per beat.
-    /// </summary>
-    [Serializable]
-    public class Part
-    {
-        public List<Note> Notes = new List<Note>();
-        public int VoiceId;
-
-        protected Part() { }
-
-        public Part(int id)
-        {
-            Notes = new List<Note>();
-            VoiceId = id;
-        }
-
-        public override string ToString()
-        {
-            return $"Voice {VoiceId}: {Notes.Count} Tones: {string.Join(", ", Notes.Select(it => it.StartPortion.ToString(3) + "-" + it.EndPortion.ToString(3)))}";
         }
     }
 }

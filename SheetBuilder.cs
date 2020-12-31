@@ -196,48 +196,65 @@ namespace CreateSheetsFromVideo
                 xmlNote.Notations.Add(notations);// { Tied = new System.Collections.ObjectModel.Collection<Tied>() { new Tied() { Type = TiedType.Stop } } });
             }
 
-            switch (note.Dotting)
+            if (note.Dotting.HasFlag(Dotting.None))
             {
-                case Dotting.Single:
-                    xmlNote.Dot.Add(new EmptyPlacement());
-                    break;
-                case Dotting.Double:
-                    xmlNote.Dot.Add(new EmptyPlacement());
-                    xmlNote.Dot.Add(new EmptyPlacement());
-                    break;
-                case Dotting.PlusQuarter:
-                    /// Split tone into whole and quarter 
-                    XmlNote wholeNote = CopyXmlNote(xmlNote);
-                    wholeNote.Duration = 0.8m * xmlNote.Duration;
+                // Do nothing
+            }
+            if (note.Dotting.HasFlag(Dotting.Dotted))
+            {
+                xmlNote.Dot.Add(new EmptyPlacement());
+            }
+            else if (note.Dotting.HasFlag(Dotting.DoubleDotted))
+            {
+                xmlNote.Dot.Add(new EmptyPlacement());
+                xmlNote.Dot.Add(new EmptyPlacement());
+            }
+            else // Handle PlusQuarter, PlusEight and so on
+            {
+                decimal bigPortion = 1m / (decimal)NoteLength.FactorForDotting[note.Dotting]; // e.g. f(1¼) = 1 / 1.25 = 0.8 
+                // Adapt main note duration
+                xmlNote.Duration = bigPortion * (decimal)note.Duration;
+                // Set extra note duration (1/4x or 1/8x or 1/16x)
+                XmlNote extraXmlNote = CopyXmlNote(xmlNote);
+                extraXmlNote.Duration = (1m - bigPortion) * (decimal)note.Duration;
 
-                    Debug.Assert((int)xmlNote.Type.Value >= (int)NoteTypeValue.Item256Th); // Else cannot take quarter
-
-                    XmlNote quarterNote = CopyXmlNote(xmlNote);
-                    quarterNote.Duration = 0.2m * xmlNote.Duration;
-                    quarterNote.Type.Value = xmlNote.Type.Value.Previous().Previous();
-
-                    if (note.Tiing != null)
+                if (note.Dotting.HasFlag(Dotting.PlusQuarter))
+                {
+                    Debug.Assert((int)note.NoteTypeValue>= (int)NoteTypeValue.Item256Th); // Else cannot take 1/4
+                    extraXmlNote.Type.Value = note.NoteTypeValue.Previous().Previous();
+                }
+                else if (note.Dotting.HasFlag(Dotting.PlusEight))
+                {
+                    Debug.Assert((int)note.NoteTypeValue >= (int)NoteTypeValue.Item128Th); // Else cannot take 1/8
+                    extraXmlNote.Type.Value = note.NoteTypeValue.Previous().Previous().Previous();
+                }
+                else if (note.Dotting.HasFlag(Dotting.Plus16th))
+                {
+                    Debug.Assert((int)note.NoteTypeValue >= (int)NoteTypeValue.Item64Th); // Else cannot take 1/16
+                    extraXmlNote.Type.Value = note.NoteTypeValue.Previous().Previous().Previous().Previous();
+                }
+                
+                if (note.Tiing != null)
+                {
+                    if (note.Tiing.TiedType == TiedType.Start)
                     {
-                        if (note.Tiing.TiedType == TiedType.Start)
-                        {
-                            quarterNote.Notations.First().Tied.First().Type = TiedType.Continue;
-                        }
-                        else if (note.Tiing.TiedType == TiedType.Stop)
-                        {
-                            wholeNote.Notations.First().Tied.First().Type = TiedType.Continue;
-                        }
-                        else
-                        {
-                            Debugger.Break();
-                        }
+                        extraXmlNote.Notations.First().Tied.First().Type = TiedType.Continue;
                     }
+                    else if (note.Tiing.TiedType == TiedType.Stop)
+                    {
+                    xmlNote.Notations.First().Tied.First().Type = TiedType.Continue;
+                    }
+                    else
+                    {
+                        Debugger.Break();
+                    }
+                }
 
-                    return new XmlNote[] { wholeNote, quarterNote };
+                return new XmlNote[] { xmlNote, extraXmlNote };
             }
 
             return new XmlNote[] { xmlNote };
         }
-
 
         private XmlNote[] NotesFromTone(Tone tone)
         {
@@ -258,7 +275,7 @@ namespace CreateSheetsFromVideo
                     AlterSpecified = alter != 0,
                     Octave = octave.ToString() // 4 is default
                 },
-                Duration = lengthHolder.GetMusicXmlDuration(Divisions),
+                //Duration = lengthHolder.GetMusicXmlDuration(Divisions),
                 Type = new NoteType()
                 {
                     Value = lengthHolder.NoteTypeValue
@@ -360,25 +377,42 @@ namespace CreateSheetsFromVideo
 
             switch (lengthHolder.Dotting)
             {
-                case Dotting.Single:
+                case Dotting.Dotted:
                     note.Dot.Add(new EmptyPlacement());
                     break;
-                case Dotting.Double:
+                case Dotting.DoubleDotted:
                     note.Dot.Add(new EmptyPlacement());
                     note.Dot.Add(new EmptyPlacement());
                     break;
+                case Dotting.Plus16th:
+                case Dotting.PlusEight:
                 case Dotting.PlusQuarter:
+                    decimal bigPortion = 1m / (decimal)NoteLength.FactorForDotting[lengthHolder.Dotting];
                     /// Split tone into whole and quarter 
                     XmlNote wholeNote = CopyXmlNote(note);
-                    wholeNote.Duration = 0.8m * note.Duration;
+                    wholeNote.Duration = bigPortion * note.Duration;
 
-                    Debug.Assert((int)note.Type.Value >= (int)NoteTypeValue.Item256Th); // Else cannot take quarter
 
-                    XmlNote quarterNote = CopyXmlNote(note);
-                    quarterNote.Duration = 0.2m * note.Duration;
-                    quarterNote.Type.Value = note.Type.Value.Previous().Previous();
+                    XmlNote extraXmlNote = CopyXmlNote(note);
+                    extraXmlNote.Duration = (1 - bigPortion) * note.Duration;
+                    if (lengthHolder.Dotting == Dotting.PlusQuarter)
+                    {
+                        Debug.Assert((int)note.Type.Value >= (int)NoteTypeValue.Item256Th); // Else cannot take 1/4
+                        extraXmlNote.Type.Value = note.Type.Value.Previous().Previous();
+                    }
+                    else if (lengthHolder.Dotting == Dotting.PlusEight)
+                    {
+                        Debug.Assert((int)note.Type.Value >= (int)NoteTypeValue.Item128Th); // Else cannot take 1/8
+                        extraXmlNote.Type.Value = note.Type.Value.Previous().Previous().Previous();
+                    }
+                    else if (lengthHolder.Dotting == Dotting.Plus16th)
+                    {
+                        Debug.Assert((int)note.Type.Value >= (int)NoteTypeValue.Item64Th); // Else cannot take 1/16
+                        extraXmlNote.Type.Value = note.Type.Value.Previous().Previous().Previous().Previous();
+                    }
 
-                    //if (tone is TiedTone split)
+
+                    //if (note is TiedTone split)
                     //{
                     //    if (split.TiedType == TiedType.Start)
                     //    {
@@ -394,12 +428,15 @@ namespace CreateSheetsFromVideo
                     //    }
                     //}
 
-                    return new XmlNote[] { wholeNote, quarterNote };
+                    return new XmlNote[] { wholeNote, extraXmlNote };
             }
 
             return new XmlNote[] { note };
         }
 
+        /// <summary>
+        ///   Ignores dotting
+        /// </summary>
         private static XmlNote CopyXmlNote(XmlNote other)
         {
             XmlNote note = new XmlNote()
@@ -579,41 +616,67 @@ namespace CreateSheetsFromVideo
 
         public Dotting Dotting { get; }
 
-        public double Deviation { get; }
+        public double ActualPortion { get; }
+
+        public double ProposedPortion { get; }
 
         public bool HasDeviation => Deviation > 0.001;
 
-        public NoteLength(NoteTypeValue noteTypeValue, Dotting dotting, double deviation)
+        public double Deviation => MakeItHarderDict[Dotting] * Helper.GetPercentageDistance(ActualPortion, ProposedPortion);
+
+        private static Dictionary<Dotting, double> MakeItHarderDict = new Dictionary<Dotting, double>()
         {
-            NoteTypeValue = noteTypeValue;
+            [Dotting.None] = 1,
+            [Dotting.Dotted] = 1,
+            [Dotting.DoubleDotted] = 3,
+
+            [Dotting.Plus16th] = 3,
+            [Dotting.PlusEight] = 3,
+            [Dotting.PlusQuarter] = 2,
+
+            [Dotting.DottedPlus16th] = 3,
+            [Dotting.DottedPlusEight] = 3,
+
+            [Dotting.DoubleDottedPlus16th] = 4,
+            [Dotting.DoubleDottedPlusEight] = 4,
+        };
+
+        public NoteLength(KeyValuePair<double, NoteTypeValue> valueForDuration, Dotting dotting, double actualPortion)
+        {
+            NoteTypeValue = valueForDuration.Value;
             Dotting = dotting;
-            Deviation = deviation;
+            ActualPortion = actualPortion;
+            ProposedPortion = FactorForDotting[dotting] * valueForDuration.Key;
         }
 
         public override string ToString()
         {
             string dottingString = "";
-            if (Dotting == Dotting.Single)
+            if (Dotting.HasFlag(Dotting.Dotted))
             {
-                dottingString = "½";
+                dottingString += "•";
             }
-            else if (Dotting == Dotting.Double)
+            else if (Dotting.HasFlag(Dotting.DoubleDotted))
             {
-                dottingString = "¾";
-            }
-            else if (Dotting == Dotting.PlusQuarter)
-            {
-                dottingString = "¼";
+                dottingString += "••";
             }
 
-            string noDeviationString = HasDeviation ? $"🗲{Deviation.ToString(3)}" : "✔";
+            if (Dotting.HasFlag(Dotting.PlusQuarter))
+            {
+                dottingString += "¼";
+            }
+            else if (Dotting.HasFlag(Dotting.PlusEight))
+            {
+                dottingString += "+1/8";
+            }
+            else if (Dotting.HasFlag(Dotting.Plus16th))
+            {
+                dottingString += "+1/16";
+            }
 
-            return $"{NoteTypeValue}{dottingString}[{noDeviationString}]";
-        }
+            string deviationString = HasDeviation ? $"🗲{ProposedPortion.ToString(3)} statt {ActualPortion.ToString(3)})" : "✔";
 
-        public decimal GetMusicXmlDuration(decimal divisions)
-        {
-            return 4 * divisions * DurationForNoteTypeValue[NoteTypeValue] * (decimal)FactorForDotting[Dotting];
+            return $"{NoteTypeValue}{dottingString}[{deviationString}]";
         }
 
         // Static section
@@ -625,18 +688,23 @@ namespace CreateSheetsFromVideo
             /// If roundTolerance == 0.1 (10%), a note with 0.55 duration is only just converted to a note with 0.5 length (one half)
             foreach (KeyValuePair<double, NoteTypeValue> valueForDuration in NoteTypeValueForDuration)
             {
-                void AppendCurrentNoteDuration(Dotting dotting)
+                void AddNoteLength(Dotting dotting)
                 {
-                    double deviation = Helper.GetPercentageDistance(portion, FactorForDotting[dotting] * valueForDuration.Key);
-                    // Make it harder to get double dotting (cause they suck)
-                    deviation = (dotting == Dotting.Double ? 4 : 1) * deviation; 
-                    noteLengths.Add(new NoteLength(valueForDuration.Value, dotting, deviation));
+                    noteLengths.Add(new NoteLength(valueForDuration, dotting, portion));
                 }
 
-                AppendCurrentNoteDuration(Dotting.None);
-                AppendCurrentNoteDuration(Dotting.PlusQuarter);
-                AppendCurrentNoteDuration(Dotting.Single);
-                AppendCurrentNoteDuration(Dotting.Double);
+                AddNoteLength(Dotting.None);
+                AddNoteLength(Dotting.Dotted);
+                AddNoteLength(Dotting.DoubleDotted);
+
+                AddNoteLength(Dotting.Plus16th);
+                AddNoteLength(Dotting.PlusEight);
+                AddNoteLength(Dotting.PlusQuarter);
+
+                AddNoteLength(Dotting.DottedPlus16th);
+                AddNoteLength(Dotting.DottedPlusEight);
+                AddNoteLength(Dotting.DoubleDottedPlus16th);
+                AddNoteLength(Dotting.DoubleDottedPlusEight);
             }
 
             // Get result with lowest deviation
@@ -644,9 +712,7 @@ namespace CreateSheetsFromVideo
             return noteLengths.First();
         }
 
-
-
-        public static Dictionary<double, NoteTypeValue> NoteTypeValueForDuration = new Dictionary<double, NoteTypeValue>()
+        public static Dictionary<double, NoteTypeValue> NoteTypeValueForDuration { get; } = new Dictionary<double, NoteTypeValue>()
             {
                 {4, NoteTypeValue.Long },
                 {2, NoteTypeValue.Breve },
@@ -663,7 +729,7 @@ namespace CreateSheetsFromVideo
                 {1.0 / 1024, NoteTypeValue.Item1024Th },
             };
 
-        public static readonly Dictionary<NoteTypeValue, decimal> DurationForNoteTypeValue = new Dictionary<NoteTypeValue, decimal>()
+        public static Dictionary<NoteTypeValue, decimal> DurationForNoteTypeValue { get; } = new Dictionary<NoteTypeValue, decimal>()
         {
             [NoteTypeValue.Long] = 4,
             [NoteTypeValue.Breve] = 2,
@@ -680,14 +746,38 @@ namespace CreateSheetsFromVideo
             [NoteTypeValue.Item1024Th] = 1m / 1024,
         };
 
-
-        public static readonly Dictionary<Dotting, double> FactorForDotting = new Dictionary<Dotting, double>()
+        public static Dictionary<Dotting, double> FactorForDotting { get; } = new Dictionary<Dotting, double>()
         {
             [Dotting.None] = 1,
+            [Dotting.Dotted] = 1.5,
+            [Dotting.DoubleDotted] = 1.75,
+
+            [Dotting.Plus16th] = 1.0625,
+            [Dotting.PlusEight] = 1.125,
             [Dotting.PlusQuarter] = 1.25,
-            [Dotting.Single] = 1.5,
-            [Dotting.Double] = 1.75,
-            [Dotting.IsZero] = 0,
+
+            [Dotting.DottedPlus16th] = 1.5625,
+            [Dotting.DottedPlusEight] = 1.625,
+
+            [Dotting.DoubleDottedPlus16th] = 1.8125,
+            [Dotting.DoubleDottedPlusEight] = 1.875,
         };
+    }
+
+    [Flags]
+    public enum Dotting
+    {
+        None = 0,
+        Dotted = 32,
+        DoubleDotted = 64,
+
+        Plus16th = 1,
+        PlusEight = 2,
+        PlusQuarter = 4,
+
+        DottedPlus16th = Dotted | Plus16th,
+        DottedPlusEight = Dotted | PlusEight,
+        DoubleDottedPlus16th = DoubleDotted | Plus16th,
+        DoubleDottedPlusEight = DoubleDotted | PlusEight,
     }
 }

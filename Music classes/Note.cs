@@ -45,7 +45,7 @@ namespace CreateSheetsFromVideo
     {
         // References
         public Beat Beat;
-        public Part Part;
+        public Voice Voice;
 
         public ToneHeight ToneHeight;
         public double StartTime;
@@ -78,11 +78,10 @@ namespace CreateSheetsFromVideo
         public int Octave => ToneHeight.Octave;
 
         // NoteLengths
-        [XmlIgnore]
         public NoteLength NoteLength => NoteLength.CreateFromPortion(Portion);
-        [XmlIgnore]
+
         public NoteTypeValue NoteTypeValue => NoteLength.NoteTypeValue;
-        [XmlIgnore]
+
         public Dotting Dotting => NoteLength.Dotting;
 
         public Note(Beat beat)
@@ -103,7 +102,7 @@ namespace CreateSheetsFromVideo
         public Note(Note toCopy)
         {
             Beat = toCopy.Beat;
-            Part = toCopy.Part;
+            Voice = toCopy.Voice;
             StartTime = toCopy.StartTime;
             EndTime = toCopy.EndTime;
             ToneHeight = toCopy.ToneHeight;
@@ -111,7 +110,7 @@ namespace CreateSheetsFromVideo
             ChordToneHeights = toCopy.ChordToneHeights;
         }
 
-        protected virtual string ToneHeightString
+        public virtual string ToneHeightString
         {
             get
             {
@@ -124,9 +123,13 @@ namespace CreateSheetsFromVideo
             }
         }
 
+
         public override string ToString()
         {
-            
+            // Time respresentation
+            //return $"{Beat.Number}: {ToneHeightString} {StartTime.ToString(3)} to {EndTime.ToString(3)}";
+
+            // Portion respresentation
             return $"{Beat.Number}: {ToneHeightString} {NoteLength} from {StartPortion.ToString(4)} to {EndPortion.ToString(4)} ({Portion.ToString(4)})";
         }
     }
@@ -139,10 +142,10 @@ namespace CreateSheetsFromVideo
             EndPortion = endPortion;
         }
 
-        public Rest(Note toCopy) : base(toCopy)
-        {
-        }
+        //public Rest(Note toCopy) : base(toCopy)
+        //{
+        //}
 
-        protected override string ToneHeightString => "Rest";
+        public override string ToneHeightString => "Rest";
     }
 }
