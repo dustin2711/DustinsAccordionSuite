@@ -9,7 +9,7 @@ namespace CreateSheetsFromVideo
     /// <summary>
     ///   Pair of Pitch & Octave
     /// </summary>
-    public struct ToneHeight
+    public class ToneHeight
     {
         /// Static 
         //////////////
@@ -56,8 +56,12 @@ namespace CreateSheetsFromVideo
             set
             {
                 Octave = value / 12;
-                Pitch= (Pitch)(value % 12);
+                Pitch = (Pitch)(value % 12);
             }
+        }
+
+        public ToneHeight()
+        {
         }
 
         public ToneHeight(Pitch pitch, int octave)
@@ -199,7 +203,7 @@ namespace CreateSheetsFromVideo
 
         public static bool operator ==(ToneHeight first, ToneHeight second)
         {
-            return first.Pitch == second.Pitch && first.Octave == second.Octave;
+            return first?.Pitch == second?.Pitch && first?.Octave == second?.Octave;
         }
 
         public static bool operator !=(ToneHeight first, ToneHeight second)

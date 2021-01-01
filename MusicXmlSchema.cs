@@ -15,6 +15,7 @@ namespace MusicXmlSchema
     using System.Collections.Generic;
     using System.Collections.ObjectModel;
     using System.Xml.Serialization;
+    using System.Linq;
 
 
     /// <summary>
@@ -25231,22 +25232,86 @@ namespace MusicXmlSchema
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     public partial class Note
     {
+        public bool IsBackup => Footnote?.Value == CreateSheetsFromVideo.SheetsBuilder.BackupFootnote;
+
+        public double Portion
+        {
+            get
+            {
+                if (IsBackup)
+                {
+                    return 0;
+                }
+
+                double dottingFactor = 1;
+                if (Dot != null)
+                {
+                    if (Dot.Count == 1)
+                    {
+                        dottingFactor = 1.5;
+                    }
+                    else if (Dot.Count == 2)
+                    {
+                        dottingFactor = 1.75;
+                    }
+                }
+
+                double noteTypeFactor = CreateSheetsFromVideo.NoteLength.NoteTypeValueForDuration.First(pair => pair.Value == Type?.Value).Key;
+                return dottingFactor * noteTypeFactor;
+            }
+        }
+
         /// <summary>
         ///   Gets pitch of note with alter included, e.g. "Gis"
         /// </summary>
-        public string GetPitchString()
+        public string PitchString
         {
-            string isOrEs = "";
-            if (Pitch.Alter != 0)
+            get
             {
-                isOrEs = Pitch.Alter == 1 ? "is" : "es";
+                if (IsBackup)
+                {
+                    return "Backup";
+                }
+
+                if (Pitch == null)
+                {
+                    return "Rest";
+                }
+                else
+                {
+                    string isOrEs = "";
+                    if (Pitch.Alter != 0)
+                    {
+                        isOrEs = Pitch.Alter == 1 ? "is" : "es";
+                    }
+                    return $"{Pitch.Step}{isOrEs}{Pitch.Octave}";
+                }
             }
-            return $"{Pitch.Step}{isOrEs}";
+        }
+
+        public string DottingString
+        {
+            get
+            {
+                if (Dot != null)
+                {
+                    if (Dot.Count == 1)
+                    {
+                        return "•";
+                    }
+                    else if (Dot.Count == 2)
+                    {
+                        return "••";
+                    }
+                }
+
+                return "";
+            }
         }
 
         public override string ToString()
         {
-            return $"{GetPitchString()}{Pitch.Octave}, {Type.Value}{(Dot.Count > 0 ? "." : "")}";
+            return $"{Voice}: {PitchString}, {Type?.Value}{DottingString} ({Portion})";
         }
 
         [System.Xml.Serialization.XmlElementAttribute("grace", Namespace = "")]
@@ -27510,6 +27575,10 @@ namespace MusicXmlSchema
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     public partial class ScorePartwisePartMeasure
     {
+        public override string ToString()
+        {
+            return string.Join(" | ", Note);
+        }
 
         [System.Xml.Serialization.XmlIgnoreAttribute()]
         private System.Collections.ObjectModel.Collection<Note> note;

@@ -28,12 +28,11 @@ namespace CreateSheetsFromVideo
             BeatValues = new BeatValues(BeatHits, tones, originStartTime);
         }
 
-        public static SheetSave Load(string path, double beatOffsetPortion)
+        public static SheetSave Load(string path)
         {
             using (FileStream stream = new FileStream(path, FileMode.OpenOrCreate))
             {
                 SheetSave save = new XmlSerializer(typeof(SheetSave)).Deserialize(stream) as SheetSave;
-                save.BeatValues.ApplyOffset(beatOffsetPortion);
                 return save;
             }
         }

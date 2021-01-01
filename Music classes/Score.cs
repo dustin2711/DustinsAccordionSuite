@@ -1,29 +1,40 @@
-﻿using System;
+﻿using MusicXmlSchema;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.Linq;
 
 namespace CreateSheetsFromVideo
 {
-    public class SingleInstance<T> where T : SingleInstance<T>
-    {
-        public T Instance;
-
-        protected SingleInstance()
-        {
-            Instance = this as T;
-        }
-    }
-
     public class Score : SingleInstance<Score>
     {
-        public const double MinimumPortion = 1.0 / 32;
+        public class Statistics
+        {
+            List<Note> NotesRemoved = new List<Note>();
+        }
+
+        public static float LeftHandHue = Color.Violet.GetHue();
+        public static float RightHandHue = Color.Yellow.GetHue();
+
+        public static bool IsRightHand(Tone tone)
+        {
+            float toneHue = tone.Color.GetHue();
+            return Math.Abs(toneHue - RightHandHue) < Math.Abs(toneHue - LeftHandHue);
+        }
+
+        public const double BeatOffsetPortion = -4.5 / 32; // Positive = shifts Beats right
+        public const double MinimumPortion = 1.0 / 64;
         public const double FrameLength = 1.0 / 30;
-        public const double MaxFrameDeltaToAddToSameVoice = 1.5;
+        /// <summary>
+        ///   For merging
+        /// </summary>
+        public const double MaxFrameDeltaTolerance = 5;
+
         /// <summary>
         ///   Tolerance for merging tones and adding tones to same voice
         /// </summary>
-        public static double PortionTolerance;
+        public static double MaxPortionTolerance;
 
         public string Name;
         public List<Beat> Beats = new List<Beat>();
@@ -35,7 +46,8 @@ namespace CreateSheetsFromVideo
         {
             Name = save.Name;
             BeatValues = new BeatValues(save.BeatHits, save.Tones, save.OriginStartTime);
-            PortionTolerance = MaxFrameDeltaToAddToSameVoice * FrameLength / BeatValues.Duration;
+            BeatValues.ApplyOffset(BeatOffsetPortion);
+            MaxPortionTolerance = MaxFrameDeltaTolerance * FrameLength / BeatValues.Duration;
 
             GetLeftAndRightHandTones(save.Tones, out List<Tone> leftTonesUnmerged, out List<Tone> rightTonesUnmerged);
 
@@ -46,7 +58,11 @@ namespace CreateSheetsFromVideo
                 beat.CreateVoices();
                 beat.OptimizeNotePortions();
                 beat.MergeAgain();
-                //beat.SplitNotesToFitXml();
+            }
+
+            foreach (Beat beat in Beats)
+            {
+                // Must be done in a second run (because tiing works betweens beats)
                 beat.RemoveEmptysAndFinalize();
             }
 
@@ -71,18 +87,17 @@ namespace CreateSheetsFromVideo
                 beats.Add(new Beat(score, beatNum++));
             }
 
-            /// Convert Tones to Notes
+            // Convert all tones to notes
             foreach (Tone tone in tones)
             {
-                // Get fitting beatNumber..
+                // Get beatNumber where tone starts..
                 int beatNumber = beatTimes.FindIndex(beatTime => beatTime - Helper.µ <= tone.StartTime && tone.StartTime < beatTime + beatValues.Duration); // can be -1 due to beatOffsetProportion!
-                // .. and get beat
-                if (!beats.FirstOrDefault(it => it.Number == beatNumber, out Beat beat))
-                {
-                    Debugger.Break(); // Beat missing!
-                }
+                // .. and obtain beat
+                Beat beat = beats.First(it => it.Number == beatNumber);
 
                 Note note = new Note(beat, tone);
+                //if (beat.Number == 2 && note.Pitch == Pitch.B)
+                    //Debugger.Break();
                 beat.AllBeatNotes.Add(note);
             }
 
@@ -98,6 +113,8 @@ namespace CreateSheetsFromVideo
                 foreach (Note note in currentBeat.AllBeatNotes.Where(note 
                     => note.EndPortion > 1))
                 {
+                    if (currentBeat.Number == 2 && note.Pitch == Pitch.B)
+                        Debugger.Break();
                     Note overhangNote = new Note(note)
                     {
                         Beat = nextBeat,
@@ -165,11 +182,11 @@ namespace CreateSheetsFromVideo
             // If one handed, get right or left
             if (tones1.Count == 0)
             {
-                tones1AreLeftHand = MainForm.IsRightHand(tones2.First());
+                tones1AreLeftHand = IsRightHand(tones2.First());
             }
             else if (tones2.Count == 0)
             {
-                tones1AreLeftHand = !MainForm.IsRightHand(tones1.First());
+                tones1AreLeftHand = !IsRightHand(tones1.First());
             }
 
             leftHandTones = tones1AreLeftHand ? tones1 : tones2;
@@ -192,6 +209,7 @@ namespace CreateSheetsFromVideo
         /// </summary>
         private static void MergeChords(List<Beat> beats)
         {
+            // Get notes of all beats
             List<Note> notes = beats.SelectMany(beat => beat.AllBeatNotes).OrderBy(note => note.StartTime).ToList();
 
             const double MaxRelativeDelta = 0.3;
@@ -207,8 +225,8 @@ namespace CreateSheetsFromVideo
                 {
                     Note chordNote = notes[index];
                     // Same starttime, endtime & duration?
-                    if (chordNote.StartPortion.IsAboutAbsolute(mainNote.StartPortion, PortionTolerance)
-                        && chordNote.EndPortion.IsAboutAbsolute(mainNote.EndPortion, PortionTolerance)
+                    if (chordNote.StartPortion.IsAboutAbsolute(mainNote.StartPortion, MaxPortionTolerance)
+                        && chordNote.EndPortion.IsAboutAbsolute(mainNote.EndPortion, MaxPortionTolerance)
                         && chordNote.Duration.IsAboutRelative(mainNote.Duration, MaxRelativeDelta))
                     {
                         mainNote.ChordToneHeights.Add(chordNote.ToneHeight);
@@ -278,25 +296,27 @@ namespace CreateSheetsFromVideo
                 // Musescore doesnt care about same voice for tied notes
                 //if (note.Tiing?.NoteBefore != null)
                 //{
-                //    //if (note.ToString() == "1: E7 5,159 to 5,219")
-                //    //    Debugger.Break();
                 //    // Create part with same VoiceId as last beat
                 //    note.Voice = AddVoice(note.Tiing.NoteBefore.Voice.Id, note);
-                //} else
+                //    break;
+                //}
 
                 // Voice with room for tone?
-                if (Voices.First(voice => note.StartPortion >= voice.Notes.Last().EndPortion - Score.PortionTolerance, out Voice fittingPart))
+                if (Voices.First(it => note.StartPortion >= it.Notes.Last().EndPortion - Score.MinimumPortion, out Voice voice))
                 {
+
+                    //if (Number == 57 && voice.Id == 0)
+                        //Debugger.Break();
                     // Yes: Add to existing voice
-                    fittingPart.Notes.Add(note);
-                    note.Voice = fittingPart;
+                    voice.Notes.Add(note);
+                    note.Voice = voice;
                 }
                 else
                 {
                     // No: Create new voice
                     for (int id = 0; true; id++)
                     {
-                        if (Voices.None(voice => voice.Id == id))
+                        if (Voices.None(it => it.Id == id))
                         {
                             note.Voice = AddVoice(id, note);
                             break;
@@ -341,33 +361,26 @@ namespace CreateSheetsFromVideo
         /// </summary>
         public void OptimizeNotePortions()
         {
-            // Make voice fit to 1/32 and fill with pauses
-            double minimum = Score.MinimumPortion;
+            double GetRoundedPortion(double portion) 
+                => Score.MinimumPortion * Math.Round(portion / Score.MinimumPortion);
 
-            double GetRoundedPortion(double portion)
-            {
-                double roundedPortion = minimum * Math.Round(portion / minimum);
-                return roundedPortion;
-            }
-
+            // Optimize
             foreach (Voice voice in Voices)
             {
                 // Debug
                 List<Note> notesBeforeOptimizing = new List<Note>();
                 foreach (Note note in voice.Notes)
                 {
-                    notesBeforeOptimizing.Add(new Note(note)); // Temp copy
+                    notesBeforeOptimizing.Add(new Note(note, true)); // Temp copy
                 }
 
-                if (Number == 6 && voice.Id == 3)
-                {
+                //if (Number == 57 && voice.Id == 0)
                     //Debugger.Break();
-                }
 
                 // FIRST NOTE
                 Note firstNote = voice.Notes.First();
                 // Gap to beatStart < minimum?
-                if (firstNote.StartPortion <= minimum)
+                if (firstNote.StartPortion <= Score.MinimumPortion)
                 {
                     // Yes: Stretch first toneStart to start of beat
                     firstNote.StartPortion = 0;
@@ -376,7 +389,7 @@ namespace CreateSheetsFromVideo
                 {
                     // No : Insert rest and adapt noteStart
                     firstNote.StartPortion = GetRoundedPortion(firstNote.StartPortion);
-                    Rest rest = new Rest(this, voice, 0, firstNote.StartPortion);
+                    Note rest = Note.CreateRest(this, voice, 0, firstNote.StartPortion);
                     voice.Notes.Insert(0, rest);
                 }
 
@@ -386,14 +399,14 @@ namespace CreateSheetsFromVideo
                     Note note = voice.Notes[i];
                     Note nextNote = voice.Notes[i + 1];
 
-                    if (note is Rest || nextNote is Rest)
+                    if (note.IsRest || nextNote.IsRest)
                     {
                         continue;
                     }
 
                     // Close enough?
                     double gap = nextNote.StartPortion - note.EndPortion;
-                    if (gap < minimum)
+                    if (gap < Score.MinimumPortion)
                     {
                         // Yes: Equalize end and start
                         double portion = (nextNote.StartPortion + note.EndPortion) / 2;
@@ -406,7 +419,7 @@ namespace CreateSheetsFromVideo
                         // No: Insert rest
                         double restStartPotion = GetRoundedPortion(note.EndPortion);
                         double restEndPotion = GetRoundedPortion(nextNote.StartPortion);
-                        Rest rest = new Rest(this, voice, restStartPotion, restEndPotion);
+                        Note rest = Note.CreateRest(this, voice, restStartPotion, restEndPotion);
                         voice.Notes.Insert(i++, rest);
                         note.EndPortion = restStartPotion;
                         nextNote.StartPortion = restEndPotion;
@@ -416,7 +429,7 @@ namespace CreateSheetsFromVideo
                 // LAST NOTE
                 Note lastNote = voice.Notes.Last();
                 // Gap to beatEnd < minimum? (Care: nextNote, not note)
-                if (1 - lastNote.EndPortion <= minimum)
+                if (1 - lastNote.EndPortion <= Score.MinimumPortion)
                 {
                     // Yes: Stretch last toneEnd to end of beat
                     lastNote.EndPortion = 1;
@@ -425,7 +438,7 @@ namespace CreateSheetsFromVideo
                 {
                     // No: Add rest and adapt noteEnd
                     lastNote.EndPortion = GetRoundedPortion(lastNote.EndPortion);
-                    Rest rest = new Rest(this, voice, lastNote.EndPortion, 1);
+                    Note rest = Note.CreateRest(this, voice, lastNote.EndPortion, 1);
                     voice.Notes.Add(rest);
                 }
 
@@ -444,11 +457,13 @@ namespace CreateSheetsFromVideo
                 OrderByStart(ref voice.Notes);
 
                 // Debug
-                //var notesBefore = notesBeforeOptimizing;
-                //var notesAfter = voice.Notes;
-                //var removed = removedNotes;
+                notesBeforeOptimizing.Clear();
+                foreach (Note note in voice.Notes)
+                {
+                    notesBeforeOptimizing.Add(new Note(note, true)); // Temp copy
+                }
 
-                // Split notes that are not xml-conform
+                // Split notes so make them xml-conform
                 for (int i = 0; i < voice.Notes.Count; i++)
                 {
                     Note note = voice.Notes[i];
@@ -463,16 +478,57 @@ namespace CreateSheetsFromVideo
                         Note extraNote = new Note(note)
                         {
                             StartPortion = note.EndPortion,
-                            Portion = secondPortion
+                            Portion = secondPortion,
                         };
+
+                        voice.Notes.Insert(i + 1, extraNote);
+
+                        // Adapt tiing
+                        if (!note.IsRest)
+                        {
+                            if (note.Tiing != null)
+                            {
+                                extraNote.Tiing = new Tiing();
+
+                                //if (note.Tiing.NoteAfter != null && note.Tiing.NoteBefore != null)
+                                //{
+                                //    throw new Exception("This can only happen if the beat is very strange (e.g. 7/16 Beat)");
+                                //} else
+                                if (note.Tiing.NoteAfter != null)
+                                {
+                                    extraNote.Tiing.NoteAfter = note.Tiing.NoteAfter;
+                                    note.Tiing.NoteAfter.Tiing.NoteBefore = extraNote;
+                                }
+                                if (note.Tiing.NoteBefore != null)
+                                {
+                                    note.Tiing.NoteBefore.Tiing.NoteAfter = note;
+                                }
+
+                                // Tie note and extraNote
+                                note.Tiing.NoteAfter = extraNote;
+                                extraNote.Tiing.NoteBefore = note;
+                            }
+                            else
+                            {
+                                // Create new tiing
+                                note.Tiing = new Tiing(noteAfter: extraNote);
+                                extraNote.Tiing = new Tiing(noteBefore: note);
+                            }
+                        }
                     }
                 }
-
 
                 // Check for deviation
                 foreach (Note note in voice.Notes.Where(note => note.NoteLength.HasDeviation))
                 {
                     Debugger.Break();
+                }
+
+                // Remove emptys
+                foreach (Note note in voice.Notes.Where(note => note.Portion < Helper.µ).ToList())
+                {
+                    voice.Notes.Remove(note);
+                    //Debugger.Break();
                 }
             } // foreach voice
 
@@ -480,13 +536,16 @@ namespace CreateSheetsFromVideo
             foreach (Voice voice in Voices)
             {
                 double totalPortion = voice.Notes.Sum(note => note.Portion);
-                if (Math.Abs(totalPortion - 1) > 0.001)
+                if (Helper.GetPercentageDistance(totalPortion, 1) > Helper.µ)
                 {
                     Debugger.Break();
                 }
             }
         }
 
+        /// <summary>
+        ///   Look for notes with same start and end portion and merges them
+        /// </summary>
         public void MergeAgain()
         {
             for (int i = 0; i < Voices.Count; i++)
@@ -497,12 +556,12 @@ namespace CreateSheetsFromVideo
                     Voice otherVoice = Voices[j];
 
                     // Compare each voice with each other voice
-                    foreach (Note note in voice.Notes.Where(it => !(it is Rest)))
+                    foreach (Note note in voice.Notes.Where(it => !it.IsRest))
                     {
                         // Collect notes to remove
                         List<Note> notesToReplace = new List<Note>();
 
-                        foreach (Note otherNote in otherVoice.Notes.Where(it => !(it is Rest)))
+                        foreach (Note otherNote in otherVoice.Notes.Where(it => !it.IsRest))
                         {
                             if (note.StartPortion.IsAboutAbsolute(otherNote.StartPortion, 0.001)
                                 && note.EndPortion.IsAboutAbsolute(otherNote.EndPortion, 0.001))
@@ -517,7 +576,7 @@ namespace CreateSheetsFromVideo
                         foreach (Note toReplace in notesToReplace.ToArray())
                         {
                             int indexToReplace = otherVoice.Notes.IndexOf(toReplace);
-                            otherVoice.Notes[indexToReplace] = new Rest(toReplace.Beat, toReplace.Voice, toReplace.StartPortion, toReplace.EndPortion);
+                            otherVoice.Notes[indexToReplace] = Note.CreateRest(toReplace.Beat, toReplace.Voice, toReplace.StartPortion, toReplace.EndPortion);
                         }
                     }
                 }
@@ -525,27 +584,10 @@ namespace CreateSheetsFromVideo
 
         }
 
-        public void SplitNotesToFitXml()
-        {
-            foreach (Voice voice in Voices)
-            {
-                for (int i = 0; i < voice.Notes.Count; i++)
-                {
-
-                }
-
-                // Check for deviation
-                foreach (Note note in voice.Notes.Where(note => note.NoteLength.HasDeviation))
-                {
-                    Debugger.Break();
-                }
-            }
-        }
-
         public void RemoveEmptysAndFinalize()
         {
             // Remove voices with only rests..
-            foreach (Voice voice in Voices.Where(voice => voice.Notes.All(note => note is Rest)).ToArray())
+            foreach (Voice voice in Voices.Where(voice => voice.Notes.All(note => note.IsRest)).ToArray())
             {
                 if (Voices.Count > 1) //.. as long as minimum 1 voice remains
                 {
@@ -557,7 +599,71 @@ namespace CreateSheetsFromVideo
                 }
             }
 
-            // Sort voices with longer notes first
+            // Look for wrong-tied notes (and more)
+            foreach (Voice voice in Voices)
+            {
+                foreach (Note note in voice.Notes.Where(note => note.Tiing != null))
+                {
+                    // Has voice?
+                    if (note.Voice == null)
+                    {
+                        Debugger.Break();
+                    }
+
+                    //if (note.Tiing?.TiedType == TiedType.Start && note.Pitch == Pitch.Bes)
+                    //Debugger.Break();
+
+                    Note noteAfter = note.Tiing.NoteAfter;
+                    if (noteAfter != null)
+                    {
+                        // Are notes tied correctly?
+                        if (noteAfter.Tiing.NoteBefore != note)
+                        {
+                            // Fix (Dirty)
+                            noteAfter.Tiing.NoteBefore = note;
+                        }
+                        if (noteAfter.ToneHeight != note.ToneHeight)
+                        {
+                            Debugger.Break();
+                        }
+
+                        // Delete tiing when tied note is empty
+                        if (noteAfter.Portion == 0)
+                        {
+                            note.Tiing.NoteAfter = null;
+                        }
+                    }
+                    
+                    Note noteBefore = note.Tiing.NoteBefore;
+                    if (noteBefore != null)
+                    {
+                        // Are notes tied correctly?
+                        if (noteBefore.Tiing.NoteAfter != note)
+                        {
+                            // Fix (Dirty)
+                            noteBefore.Tiing.NoteAfter = note;
+                        }
+                        if (noteBefore.ToneHeight != note.ToneHeight)
+                        {
+                            Debugger.Break();
+                        }
+
+                        // Delete tiing when tied note is empty
+                        if (noteBefore.Portion == 0)
+                        {
+                            note.Tiing.NoteBefore = null;
+                        }
+                    }
+
+                    if (note.Tiing.NoteBefore == null && note.Tiing.NoteAfter == null)
+                    {
+                        note.Tiing = null;
+                    }
+
+                }
+            }
+
+            // Sort voices with longer notes first (May allow MusicXml the correct presentation)
             Voices = Voices.OrderByDescending(voice => voice.Notes.Select(note => note.Portion).Mean()).ToList();
 
             // Set AllBeatNotes
@@ -599,7 +705,7 @@ namespace CreateSheetsFromVideo
         public override string ToString()
         {
             string notesAsString = string.Join(", ", Notes.Select(note 
-                => $"{(note is Rest ? "Rest" : note.ToneHeightString)}({note.StartPortion.ToString(2)}-{note.EndPortion.ToString(2)}"));
+                => $"{note.ToneHeightString}({note.StartPortion.ToString(2)}-{note.EndPortion.ToString(2)}"));
             return $"{Beat.Number}-{Id}: {Notes.Count} Notes: {notesAsString}";
         }
     }

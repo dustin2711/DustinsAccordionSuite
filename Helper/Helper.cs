@@ -8,12 +8,40 @@ using System.Drawing;
 
 namespace CreateSheetsFromVideo
 {
+    public struct Span<T>
+    {
+        public T Start;
+        public T End;
+
+        public Span(T start, T end)
+        {
+            Start = start;
+            End = end;
+        }
+
+    }
+
+    public class SingleInstance<T> where T : SingleInstance<T>
+    {
+        public T Instance;
+
+        protected SingleInstance()
+        {
+            Instance = this as T;
+        }
+    }
+
     public static class Helper
     {
         /// <summary>
         ///   0.000001
         /// </summary>
         public static double µ => 0.000001;
+
+        /// <summary>
+        ///   0.001
+        /// </summary>
+        public static double m => 0.001;
 
         /// <summary>
         ///   Returns how much the bigger number is bigger than the small number (always positive values).

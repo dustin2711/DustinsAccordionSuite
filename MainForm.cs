@@ -29,24 +29,23 @@ namespace CreateSheetsFromVideo
 {
     /// <summary>
     ///   ToDo:
-    ///   [ ] Lange Note und währenddessen viele kleine
+    ///   [x] Lange Note und währenddessen viele kleine
     ///   [ ] In Voices Noten bei Bedarf langziehen um Lücken zu füllen?
     /// </summary>
     public partial class MainForm : Form
     {
-        // Serialize List<Tone> to file
-        private const string SheetSavePath = @"C:\Users\Dustin\Desktop\SheetSave";
-
         // Video file
         //private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow.mp4";
-        private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow 360.mp4";
+        private const string VideoPath = @"C:\Users\Dustin\Desktop\Zeldas Lullaby.mp4";
+        private string MusicXmlPath = Path.ChangeExtension(VideoPath, ".musicxml");
+        private string SheetsPath = Path.ChangeExtension(VideoPath, ".sheets");
 
         // Settings
         private const bool Save = false; // False = LoadMode, True = SaveMode
         private const bool OpenMusicXmlWhenCreated = true;
         private const ColorMode KeyColorMode = ColorMode.All; //Blue = left, green = right
-        private double StartTime = 5;
-        private const double EndTime = 20;
+        private double StartTime = 4;
+        private const double EndTime = 35;
         private const bool IsPlayingDefault = true;
         private const bool PlayRealtimeDefault = true;
         private const bool ShowVisualsDefault = true;
@@ -68,20 +67,20 @@ namespace CreateSheetsFromVideo
         // For manual inserting beat beginnings
         private List<BeatHit> beatHits = new List<BeatHit>();
 
-        /// <summary>
-        ///   hue smaller 150 (green)? [R=0, G=120, B=240]
-        /// </summary>
-        public static bool IsRightHand(Tone tone)
-        {
-            return tone.Color.GetHue() < 150; 
-        }
-
         private static MainForm Instance;
 
         public MainForm()
         {
             Instance = this;
-            //SaveYoutubeVideo(@"https://www.youtube.com/watch?v=lPtl-gBpGG8");
+
+            // SaveYoutubeVideo
+            if (false)
+            {
+                string link = @"https://www.youtube.com/watch?v=O6MtYbfo1eY";
+                YouTubeVideo video = YouTube.Default.GetVideo(link); // gets a Video object with info about the video
+                File.WriteAllBytes(@"C:\Users\Dustin\Desktop\" + video.FullName, video.GetBytes());
+                Debugger.Break();
+            }
 
             InitializeComponent();
             InitializeUI();
@@ -90,19 +89,18 @@ namespace CreateSheetsFromVideo
             if (!Save)
             {
                 // Load SheetSave and draw
-                save = SheetSave.Load(SheetSavePath, SheetsBuilder.BeatOffsetPortion);
+                save = SheetSave.Load(SheetsPath);
                 //save = SheetSaveTest.BeatWith2Voices;
                 DrawSheetSave(save);
 
                 // Start SheetsBuilder and save result
                 SheetsBuilder builder = new SheetsBuilder(save, Path.GetFileNameWithoutExtension(VideoPath));
-                string savePath = Path.ChangeExtension(VideoPath, ".musicxml");
-                builder.SaveAsFile(savePath);
+                builder.SaveAsFile(MusicXmlPath);
 
                 // Open 
                 if (OpenMusicXmlWhenCreated)
                 {
-                    Helper.OpenWithDefaultProgram(savePath);
+                    Helper.OpenWithDefaultProgram(MusicXmlPath);
                 }
 
                 //Load += (s, e) => Close();
@@ -135,12 +133,6 @@ namespace CreateSheetsFromVideo
 
                 RefreshUI();
             };
-        }
-
-        private void SaveYoutubeVideo(string link)
-        {
-            YouTubeVideo video = YouTube.Default.GetVideo(link); // gets a Video object with info about the video
-            File.WriteAllBytes(@"C:\Users\Dustin\Desktop\" + video.FullName, video.GetBytes());
         }
 
         private bool ShowVisuals => checkBoxShowVisuals.Checked;
@@ -341,10 +333,10 @@ namespace CreateSheetsFromVideo
         {
             if (checkBoxSave.Checked)
             {
-                SheetSave.Save(SheetSavePath, StartTime, tonesPast, beatHits);
+                SheetSave.Save(SheetsPath, StartTime, tonesPast, beatHits);
                 //SaveSheets(SheetSavePath);
             }
-            MessageBox.Show("Saved tones to " + SheetSavePath);
+            MessageBox.Show("Saved tones to " + SheetsPath);
             //Close();
         }
 
