@@ -136,8 +136,9 @@ namespace CreateSheetsFromVideo
 
     public class Rest : Note
     {
-        public Rest(Beat beat, double startPortion, double endPortion) : base(beat)
+        public Rest(Beat beat, Voice voice, double startPortion, double endPortion) : base(beat)
         {
+            Voice = voice;
             StartPortion = startPortion;
             EndPortion = endPortion;
         }

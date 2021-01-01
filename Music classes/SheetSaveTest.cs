@@ -18,9 +18,9 @@ namespace CreateSheetsFromVideo
                     originStartTime: 0,
                     tones: new List<Tone>()
                     {
-                        new Tone(ToneHeight.C4, 0, 1),
-                        new Tone(ToneHeight.D4, 0, 0.5),
-                        new Tone(ToneHeight.E4, 0.5, 0.5),
+                        new Tone(ToneHeight.C6, 0, 1),
+                        new Tone(ToneHeight.D6, 0, 0.5),
+                        new Tone(ToneHeight.E6, 0.5, 1.5),
                     },
                     beatHits: new List<BeatHit>()
                     {

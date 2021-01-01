@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Text;
@@ -11,6 +12,13 @@ namespace CreateSheetsFromVideo
 
     public static class Extensions
     {
+        public static string Cut(this StringBuilder builder, int startIndex, int length)
+        {
+            string textCutOut = builder.ToString(startIndex, length);
+            builder.Remove(startIndex, length);
+            return textCutOut;
+        }
+
         public static bool None<T>(this IEnumerable<T> source, Func<T, bool> predicate)
         {
             return !source.Any(predicate);
@@ -168,7 +176,7 @@ namespace CreateSheetsFromVideo
             return list.Contains(obj);
         }
 
-        public static bool TryGet<T>(this IEnumerable<T> list, Func<T, bool> func, out T element)
+        public static bool FirstOrDefault<T>(this IEnumerable<T> list, Func<T, bool> func, out T element)
         {
             element = list.FirstOrDefault(func);
             return element != null;

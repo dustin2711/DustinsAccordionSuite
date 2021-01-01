@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Serialization;
 
 namespace CreateSheetsFromVideo
 {
@@ -24,6 +26,26 @@ namespace CreateSheetsFromVideo
             Tones = tones;
             BeatHits = beatHits;
             BeatValues = new BeatValues(BeatHits, tones, originStartTime);
+        }
+
+        public static SheetSave Load(string path, double beatOffsetPortion)
+        {
+            using (FileStream stream = new FileStream(path, FileMode.OpenOrCreate))
+            {
+                SheetSave save = new XmlSerializer(typeof(SheetSave)).Deserialize(stream) as SheetSave;
+                save.BeatValues.ApplyOffset(beatOffsetPortion);
+                return save;
+            }
+        }
+
+        public static void Save(string path, double StartTime, List<Tone> tones, List<BeatHit> hits)
+        {
+            File.WriteAllText(path, "");
+            using (FileStream stream = new FileStream(path, FileMode.OpenOrCreate))
+            {
+                SheetSave save = new SheetSave(Path.GetFileNameWithoutExtension(path), StartTime, tones, hits);
+                new XmlSerializer(typeof(SheetSave)).Serialize(stream, save);
+            }
         }
 
         public override string ToString()

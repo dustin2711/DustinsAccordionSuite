@@ -14,11 +14,11 @@ namespace CreateSheetsFromVideo
         /// Static 
         //////////////
 
-        public static ToneHeight C4 => new ToneHeight(Pitch.C, 4);
-        public static ToneHeight D4 => new ToneHeight(Pitch.D, 4);
-        public static ToneHeight E4 => new ToneHeight(Pitch.E, 4);
-        public static ToneHeight F4 => new ToneHeight(Pitch.F, 4);
-        public static ToneHeight G4 => new ToneHeight(Pitch.G, 4);
+        public static ToneHeight C6 => new ToneHeight(Pitch.C, 6);
+        public static ToneHeight D6 => new ToneHeight(Pitch.D, 6);
+        public static ToneHeight E6 => new ToneHeight(Pitch.E, 6);
+        public static ToneHeight F6 => new ToneHeight(Pitch.F, 6);
+        public static ToneHeight G6 => new ToneHeight(Pitch.G, 6);
 
         private static readonly Pitch[] WhitePitches = new Pitch[]
         {
@@ -205,6 +205,23 @@ namespace CreateSheetsFromVideo
         public static bool operator !=(ToneHeight first, ToneHeight second)
         {
             return first.Pitch != second.Pitch || first.Octave != second.Octave;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is ToneHeight toneHeight)
+            {
+                return this == toneHeight;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public override int GetHashCode()
+        {
+            return Pitch.GetHashCode() ^ Octave.GetHashCode();
         }
     }
 

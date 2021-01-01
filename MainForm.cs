@@ -43,7 +43,7 @@ namespace CreateSheetsFromVideo
 
         // Settings
         private const bool Save = false; // False = LoadMode, True = SaveMode
-        private const bool StartMusescoreAfterLoading = false;
+        private const bool OpenMusicXmlWhenCreated = true;
         private const ColorMode KeyColorMode = ColorMode.All; //Blue = left, green = right
         private double StartTime = 5;
         private const double EndTime = 20;
@@ -66,7 +66,7 @@ namespace CreateSheetsFromVideo
         private List<PianoKey> pianoKeys;
 
         // For manual inserting beat beginnings
-        private List<BeatHit> beatTimes = new List<BeatHit>();
+        private List<BeatHit> beatHits = new List<BeatHit>();
 
         /// <summary>
         ///   hue smaller 150 (green)? [R=0, G=120, B=240]
@@ -90,8 +90,8 @@ namespace CreateSheetsFromVideo
             if (!Save)
             {
                 // Load SheetSave and draw
-                save = LoadSheetSave(SheetSavePath);
-                save.BeatValues.ApplyOffset(SheetsBuilder.BeatOffsetPortion);
+                save = SheetSave.Load(SheetSavePath, SheetsBuilder.BeatOffsetPortion);
+                //save = SheetSaveTest.BeatWith2Voices;
                 DrawSheetSave(save);
 
                 // Start SheetsBuilder and save result
@@ -100,7 +100,7 @@ namespace CreateSheetsFromVideo
                 builder.SaveAsFile(savePath);
 
                 // Open 
-                if (StartMusescoreAfterLoading)
+                if (OpenMusicXmlWhenCreated)
                 {
                     Helper.OpenWithDefaultProgram(savePath);
                 }
@@ -295,7 +295,7 @@ namespace CreateSheetsFromVideo
 
         private void ClearBeatTimes()
         {
-            beatTimes.Clear();
+            beatHits.Clear();
             textBoxBeatTimes.Clear();
         }
 
@@ -330,7 +330,7 @@ namespace CreateSheetsFromVideo
 
         private void InsertBeat(bool isMainBeat)
         {
-            beatTimes.Add(new BeatHit(isMainBeat, CurrentTime));
+            beatHits.Add(new BeatHit(isMainBeat, CurrentTime));
             DrawBeatDash(GetDrawPositionX(CurrentTime), isMainBeat);
         }
 
@@ -341,7 +341,8 @@ namespace CreateSheetsFromVideo
         {
             if (checkBoxSave.Checked)
             {
-                SaveSheets(SheetSavePath);
+                SheetSave.Save(SheetSavePath, StartTime, tonesPast, beatHits);
+                //SaveSheets(SheetSavePath);
             }
             MessageBox.Show("Saved tones to " + SheetSavePath);
             //Close();
@@ -368,15 +369,7 @@ namespace CreateSheetsFromVideo
             using (FileStream stream = new FileStream(path, FileMode.OpenOrCreate))
             {
                 new XmlSerializer(typeof(SheetSave)).Serialize(stream, 
-                    new SheetSave(Path.GetFileNameWithoutExtension(path), StartTime, tonesPast, beatTimes));
-            }
-        }
-
-        private SheetSave LoadSheetSave(string path)
-        {
-            using (FileStream stream = new FileStream(path, FileMode.OpenOrCreate))
-            {
-                return new XmlSerializer(typeof(SheetSave)).Deserialize(stream) as SheetSave;
+                    new SheetSave(Path.GetFileNameWithoutExtension(path), StartTime, tonesPast, beatHits));
             }
         }
 
@@ -492,7 +485,7 @@ namespace CreateSheetsFromVideo
                             || KeyColorMode == ColorMode.Blue && hue > 180
                             || KeyColorMode == ColorMode.Green && hue < 180))
                         {
-                            if (tonesActive.TryGet(tone => tone.ToneHeight == key.ToneHeight, out Tone activeTone))
+                            if (tonesActive.FirstOrDefault(tone => tone.ToneHeight == key.ToneHeight, out Tone activeTone))
                             {
                                 //Log("Hold " + key.ToneHeight);
 
@@ -523,7 +516,7 @@ namespace CreateSheetsFromVideo
                     else
                     {
                         // KEY RELEASED: If it was active, shift to tonesPast
-                        if (tonesActive.TryGet(prev => prev.ToneHeight == key.ToneHeight, out Tone activeTone))
+                        if (tonesActive.FirstOrDefault(prev => prev.ToneHeight == key.ToneHeight, out Tone activeTone))
                         {
                             //Log("Released new " + key.ToneHeight);
                             activeTone.EndTime = CurrentTime;

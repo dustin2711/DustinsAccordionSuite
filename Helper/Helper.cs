@@ -11,6 +11,11 @@ namespace CreateSheetsFromVideo
     public static class Helper
     {
         /// <summary>
+        ///   0.000001
+        /// </summary>
+        public static double µ => 0.000001;
+
+        /// <summary>
         ///   Returns how much the bigger number is bigger than the small number (always positive values).
         ///   E.g. Inputs 2.2 and 2.0 => Returns 0.1 (2.2 is 10 % bigger than 2.0)
         /// </summary>
