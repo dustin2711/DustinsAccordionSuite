@@ -64,6 +64,11 @@ namespace CreateSheetsFromVideo
         public Tiing Tiing;
         public List<ToneHeight> ChordToneHeights = new List<ToneHeight>();
 
+        /// <summary>
+        ///   1 = StartTime, 2 = EndTime, 3 = Both
+        /// </summary>
+        public int Anchoring = 0;
+
         public double Portion
         {
             get => EndPortion - StartPortion;
@@ -111,13 +116,17 @@ namespace CreateSheetsFromVideo
 
         public bool IsRest => ToneHeight == null;
 
-        public Note(Beat beat)
+        public Note()
         {
             Id = IdCounter++;
+        }
+
+        public Note(Beat beat) : this()
+        {
             Beat = beat;
         }
 
-        public Note(Beat beat, Tone tone) : this(beat)
+        public Note(Tone tone) : this()
         {
             ToneHeight = tone.ToneHeight;
             StartTime = tone.StartTime;
@@ -139,9 +148,9 @@ namespace CreateSheetsFromVideo
         /// <summary>
         ///   Creates copy copiing Beat, Voice, ToneHeight and ChordToneHeights
         /// </summary>
-        public Note(Note toCopy, bool copyTimeAndTiing = false)
+        public Note(Note toCopy, bool copyTimeAndTiing = false, bool copySameId = false)
         {
-            Id = toCopy.Id + 10000;
+            Id = copySameId ? toCopy.Id : (toCopy.Id + 10000);
 
             Beat = toCopy.Beat; 
             Voice = toCopy.Voice;
@@ -179,11 +188,16 @@ namespace CreateSheetsFromVideo
 
         public override string ToString()
         {
-            // Time respresentation
-            //return $"{Beat.Number}: {ToneHeightString} {StartTime.ToString(3)} to {EndTime.ToString(3)}";
-
-            // Portion respresentation
-            return $"({Id}) {Beat.Number}-{Voice?.Id}: {ToneHeightString} {NoteLength} {(Tiing?.TiedType.ToString() ?? "")} from {StartPortion.ToString(4)} to {EndPortion.ToString(4)} ({Portion.ToString(4)})";
+            if (Beat == null)
+            {
+                // Time respresentation
+                return $"({Id}) {ToneHeightString} {StartTime.ToString(3)} to {EndTime.ToString(3)} ({Duration.ToString(3)})";
+            }
+            else
+            {
+                // Portion respresentation
+                return $"({Id}) {Beat.Number}-{Voice?.Id}: {ToneHeightString} {NoteLength} {(Tiing?.TiedType.ToString() ?? "")} from {StartPortion.ToString(4)} to {EndPortion.ToString(4)} ({Portion.ToString(4)})";
+            }
         }
     }
 

@@ -59,18 +59,18 @@ namespace CreateSheetsFromVideo
     [Serializable]
     public struct BeatHit
     {
-        public bool isMainBeat;
-        public double startTime;
+        public bool IsMainBeat;
+        public double Time;
 
         public BeatHit(bool mainBeat, double startTime)
         {
-            this.isMainBeat = mainBeat;
-            this.startTime = startTime;
+            this.IsMainBeat = mainBeat;
+            this.Time = startTime;
         }
 
         public override string ToString()
         {
-            return $"{Extensions.ToString(startTime)} {(isMainBeat ? "(main)" : "")}";
+            return $"{Extensions.ToString(Time)} {(IsMainBeat ? "(main)" : "")}";
         }
     }
 }

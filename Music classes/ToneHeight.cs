@@ -19,6 +19,8 @@ namespace CreateSheetsFromVideo
         public static ToneHeight E6 => new ToneHeight(Pitch.E, 6);
         public static ToneHeight F6 => new ToneHeight(Pitch.F, 6);
         public static ToneHeight G6 => new ToneHeight(Pitch.G, 6);
+        public static ToneHeight A6 => new ToneHeight(Pitch.A, 6);
+        public static ToneHeight B6 => new ToneHeight(Pitch.B, 6);
 
         private static readonly Pitch[] WhitePitches = new Pitch[]
         {

@@ -36,7 +36,7 @@ namespace CreateSheetsFromVideo
     {
         // Video file
         //private const string VideoPath = @"C:\Users\Dustin\Desktop\Slider Yellow.mp4";
-        private const string VideoPath = @"C:\Users\Dustin\Desktop\Zeldas Lullaby.mp4";
+        private const string VideoPath = @"C:\Users\Dustin\Desktop\Mario.mp4";
         private string MusicXmlPath = Path.ChangeExtension(VideoPath, ".musicxml");
         private string SheetsPath = Path.ChangeExtension(VideoPath, ".sheets");
 
@@ -44,8 +44,8 @@ namespace CreateSheetsFromVideo
         private const bool Save = false; // False = LoadMode, True = SaveMode
         private const bool OpenMusicXmlWhenCreated = true;
         private const ColorMode KeyColorMode = ColorMode.All; //Blue = left, green = right
-        private double StartTime = 4;
-        private const double EndTime = 35;
+        private double StartTime = 3;
+        private const double EndTime = 40;
         private const bool IsPlayingDefault = true;
         private const bool PlayRealtimeDefault = true;
         private const bool ShowVisualsDefault = true;
@@ -76,7 +76,7 @@ namespace CreateSheetsFromVideo
             // SaveYoutubeVideo
             if (false)
             {
-                string link = @"https://www.youtube.com/watch?v=O6MtYbfo1eY";
+                string link = @"https://www.youtube.com/watch?v=OzNhUtHutIg";
                 YouTubeVideo video = YouTube.Default.GetVideo(link); // gets a Video object with info about the video
                 File.WriteAllBytes(@"C:\Users\Dustin\Desktop\" + video.FullName, video.GetBytes());
                 Debugger.Break();
@@ -90,7 +90,8 @@ namespace CreateSheetsFromVideo
             {
                 // Load SheetSave and draw
                 save = SheetSave.Load(SheetsPath);
-                //save = SheetSaveTest.BeatWith2Voices;
+                //save.BeatValues = new BeatValues(save.BeatHits, save.Tones, save.OriginStartTime);
+                //save = SheetSaveTest.AnchorTest;
                 DrawSheetSave(save);
 
                 // Start SheetsBuilder and save result
@@ -176,7 +177,7 @@ namespace CreateSheetsFromVideo
             buttonClearNotesActive.Click += (s, e) => textBoxTonesActiveLeft.Clear();
             buttonSetNotebarStart.Click += (s, e) => ResetNotebar();
             textBoxJumpTo.KeyDown += TextBoxJumpTo_KeyDown;
-            buttonClearBeatTimes.Click += (s, e) => ClearBeatTimes();
+            buttonClearBeatHits.Click += (s, e) => ClearBeatHits();
             KeyPreview = true;
             KeyDown += MainForm_KeyDown;
         }
@@ -206,7 +207,6 @@ namespace CreateSheetsFromVideo
             pianoKeys.Clear();
             tonesActive.Clear();
             tonesPast.Clear();
-            ClearBeatTimes();
 
             // Clear textboxes
             textBoxLog.Clear();
@@ -285,7 +285,7 @@ namespace CreateSheetsFromVideo
             textBoxLog.Clear();
         }
 
-        private void ClearBeatTimes()
+        private void ClearBeatHits()
         {
             beatHits.Clear();
             textBoxBeatTimes.Clear();
@@ -323,6 +323,14 @@ namespace CreateSheetsFromVideo
         private void InsertBeat(bool isMainBeat)
         {
             beatHits.Add(new BeatHit(isMainBeat, CurrentTime));
+
+            // Fill Textbox
+            textBoxBeatTimes.Clear();
+            foreach (BeatHit hit in beatHits)
+            {
+                textBoxBeatTimes.AppendText(hit.Time.ToString(3) + (hit.IsMainBeat ? "(main)" : "") + Environment.NewLine);
+            }
+
             DrawBeatDash(GetDrawPositionX(CurrentTime), isMainBeat);
         }
 
@@ -519,7 +527,7 @@ namespace CreateSheetsFromVideo
                             DrawTone(activeTone);
                             needToInvalidate = true;
 
-                            var times = save.BeatValues.GetBeatStartTimes();
+                            var times = save.BeatValues.BeatTimes;
                             double hit = times.FirstOrDefault(time => time < CurrentTime && CurrentTime < time + save.BeatValues.Duration);
                             int number = times.IndexOf(hit);
                             labelBeatNumber.Text = "Beat: " + number;

@@ -61,11 +61,11 @@ namespace CreateSheetsFromVideo
             StartTime = startTime;
         }
 
-        public Tone(ToneHeight toneHeight, double startTime, double duration)
+        public Tone(ToneHeight toneHeight, double startTime, double endTime)
         {
             ToneHeight = toneHeight;
             StartTime = startTime;
-            Duration = duration;
+            EndTime = endTime;
         }
 
         public override string ToString()

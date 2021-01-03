@@ -50,7 +50,7 @@
             this.labelJumpTo = new System.Windows.Forms.Label();
             this.textBoxResetTime = new System.Windows.Forms.TextBox();
             this.textBoxBeatTimes = new System.Windows.Forms.TextBox();
-            this.buttonClearBeatTimes = new System.Windows.Forms.Button();
+            this.buttonClearBeatHits = new System.Windows.Forms.Button();
             this.bindingNavigator1 = new System.Windows.Forms.BindingNavigator(this.components);
             this.bindingNavigatorAddNewItem = new System.Windows.Forms.ToolStripButton();
             this.bindingNavigatorCountItem = new System.Windows.Forms.ToolStripLabel();
@@ -259,14 +259,14 @@
             this.textBoxBeatTimes.Size = new System.Drawing.Size(153, 194);
             this.textBoxBeatTimes.TabIndex = 21;
             // 
-            // buttonClearBeatTimes
+            // buttonClearBeatHits
             // 
-            this.buttonClearBeatTimes.Location = new System.Drawing.Point(787, 24);
-            this.buttonClearBeatTimes.Name = "buttonClearBeatTimes";
-            this.buttonClearBeatTimes.Size = new System.Drawing.Size(153, 20);
-            this.buttonClearBeatTimes.TabIndex = 22;
-            this.buttonClearBeatTimes.Text = "Clear";
-            this.buttonClearBeatTimes.UseVisualStyleBackColor = true;
+            this.buttonClearBeatHits.Location = new System.Drawing.Point(787, 24);
+            this.buttonClearBeatHits.Name = "buttonClearBeatHits";
+            this.buttonClearBeatHits.Size = new System.Drawing.Size(153, 20);
+            this.buttonClearBeatHits.TabIndex = 22;
+            this.buttonClearBeatHits.Text = "Clear BeatHits";
+            this.buttonClearBeatHits.UseVisualStyleBackColor = true;
             // 
             // bindingNavigator1
             // 
@@ -475,7 +475,7 @@
             this.Controls.Add(this.labelActiveTones);
             this.Controls.Add(this.pictureBoxNotes);
             this.Controls.Add(this.bindingNavigator1);
-            this.Controls.Add(this.buttonClearBeatTimes);
+            this.Controls.Add(this.buttonClearBeatHits);
             this.Controls.Add(this.textBoxBeatTimes);
             this.Controls.Add(this.textBoxResetTime);
             this.Controls.Add(this.labelJumpTo);
@@ -532,7 +532,7 @@
         private System.Windows.Forms.Label labelJumpTo;
         private System.Windows.Forms.TextBox textBoxResetTime;
         private System.Windows.Forms.TextBox textBoxBeatTimes;
-        private System.Windows.Forms.Button buttonClearBeatTimes;
+        private System.Windows.Forms.Button buttonClearBeatHits;
         private System.Windows.Forms.BindingNavigator bindingNavigator1;
         private System.Windows.Forms.ToolStripButton bindingNavigatorAddNewItem;
         private System.Windows.Forms.ToolStripLabel bindingNavigatorCountItem;

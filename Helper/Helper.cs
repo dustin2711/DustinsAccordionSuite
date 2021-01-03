@@ -36,12 +36,12 @@ namespace CreateSheetsFromVideo
         /// <summary>
         ///   0.000001
         /// </summary>
-        public static double µ => 0.000001;
+        public const double µ = 0.000001;
 
         /// <summary>
         ///   0.001
         /// </summary>
-        public static double m => 0.001;
+        public const double m = 0.001;
 
         /// <summary>
         ///   Returns how much the bigger number is bigger than the small number (always positive values).
@@ -62,6 +62,11 @@ namespace CreateSheetsFromVideo
             {
                 return (b / a) - 1;
             }
+        }
+
+        public static double Distance(double a, double b)
+        {
+            return Math.Abs(a - b);
         }
 
         public static string TimeStringFromMs(double milliseconds)

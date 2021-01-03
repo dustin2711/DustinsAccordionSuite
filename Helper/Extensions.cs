@@ -147,7 +147,7 @@ namespace CreateSheetsFromVideo
         /// <summary>
         ///   Math.Abs(value - otherValue) <= absoluteDelta
         /// </summary>
-        public static bool IsAboutAbsolute(this double value, double otherValue, double absoluteDelta)
+        public static bool IsAboutAbsolute(this double value, double otherValue, double absoluteDelta = Helper.µ)
         {
             return Math.Abs(value - otherValue) <= absoluteDelta;
         }
