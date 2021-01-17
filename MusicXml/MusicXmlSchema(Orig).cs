@@ -25232,12 +25232,22 @@ namespace MusicXmlSchema
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     public partial class Note
     {
+        public override string ToString()
+        {
+            return $"V{Voice}: {PitchString}, {Type?.Value}{DottingString} ({Portion})";
+        }
+
         public bool IsBackup => Footnote?.Value == CreateSheetsFromVideo.SheetsBuilder.BackupFootnote;
 
         public double Portion
         {
             get
             {
+                if (Type == null)
+                {
+                    return 0;
+                }
+
                 if (IsBackup)
                 {
                     return 0;
@@ -25256,13 +25266,13 @@ namespace MusicXmlSchema
                     }
                 }
 
-                double noteTypeFactor = CreateSheetsFromVideo.NoteLength.NoteTypeValueForDuration.First(pair => pair.Value == Type?.Value).Key;
+                double noteTypeFactor = CreateSheetsFromVideo.NoteLength.NoteTypeValueForDuration.First(pair => pair.Value == Type.Value).Key;
                 return dottingFactor * noteTypeFactor;
             }
         }
 
         /// <summary>
-        ///   Gets pitch of note with alter included, e.g. "Gis"
+        ///   Gets pitch of note with alter but no octave included ("Gis")
         /// </summary>
         public string PitchString
         {
@@ -25284,7 +25294,7 @@ namespace MusicXmlSchema
                     {
                         isOrEs = Pitch.Alter == 1 ? "is" : "es";
                     }
-                    return $"{Pitch.Step}{isOrEs}{Pitch.Octave}";
+                    return $"{Pitch.Step}{isOrEs}";// {Pitch.Octave}";
                 }
             }
         }
@@ -25307,11 +25317,6 @@ namespace MusicXmlSchema
 
                 return "";
             }
-        }
-
-        public override string ToString()
-        {
-            return $"{Voice}: {PitchString}, {Type?.Value}{DottingString} ({Portion})";
         }
 
         [System.Xml.Serialization.XmlElementAttribute("grace", Namespace = "")]
@@ -25784,6 +25789,43 @@ namespace MusicXmlSchema
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     public partial class Pitch
     {
+        public CreateSheetsFromVideo.Pitch OwnPitch
+        {
+            get
+            {
+                string alterString = "";
+                if (Alter == -1)
+                {
+                    alterString = "es";
+                }
+                else if (Alter == 1)
+                {
+                    alterString = "is";
+                }
+                string toParse = Step + alterString;
+
+                // Substitute
+                if (toParse == "Dis")
+                {
+                    toParse = "Es";
+                }
+                else if (toParse == "Ees")
+                {
+                    toParse = "Es";
+                }
+                else if (toParse == "Aes")
+                {
+                    toParse = "Gis";
+                }
+                else if (toParse == "Ges")
+                {
+                    toParse = "Fis";
+                }
+
+                var pitch = CreateSheetsFromVideo.Helper.ParseEnum<CreateSheetsFromVideo.Pitch>(toParse);
+                return pitch;
+            }
+        }
 
         [System.Xml.Serialization.XmlElementAttribute("step", Namespace = "")]
         public Step Step { get; set; }
@@ -27577,7 +27619,7 @@ namespace MusicXmlSchema
     {
         public override string ToString()
         {
-            return string.Join(" | ", Note);
+            return Number + ".) " + string.Join(" | ", Note);
         }
 
         [System.Xml.Serialization.XmlIgnoreAttribute()]

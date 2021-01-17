@@ -9,6 +9,7 @@ namespace CreateSheetsFromVideo
 {
     enum AcchordType
     {
+        Undefined,
         Dur,
         Mol,
         Sept,
@@ -100,6 +101,11 @@ namespace CreateSheetsFromVideo
             {
                 throw new Exception("Could not get Step-enum from pitch");
             }
+        }
+
+        public static void ApplyAlter(this Pitch pitch, int alter)
+        {
+
         }
     }
 }

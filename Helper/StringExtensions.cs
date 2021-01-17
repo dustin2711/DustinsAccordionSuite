@@ -35,10 +35,32 @@ namespace CreateSheetsFromVideo
             }
         }
 
-        public static int FindIndexBefore(this string text, int startIndex, string searchString, bool addSearchstringLength = false)
+        public static IEnumerable<int> AllIndexesOf(this string str, params string[] searchstrings)
+        {
+            List<int> indexes = new List<int>();
+            foreach (string searchString in searchstrings)
+            {
+                int minIndex = str.IndexOf(searchString);
+                while (minIndex != -1)
+                {
+                    indexes.Add(minIndex);
+                    minIndex = str.IndexOf(searchString, minIndex + searchString.Length);
+                }
+            }
+
+            indexes.Sort();
+            return indexes;
+        }
+
+        public static int FindIndexBefore(this string text, int startIndex, string searchString, bool addSearchstringLength = false, int maxIndexToSearch = int.MaxValue)
         {
             for (int index = startIndex; index >= 0; index--)
             {
+                if (index > maxIndexToSearch)
+                {
+                    break;
+                }
+
                 if (text.Substring(index, searchString.Length) == searchString)
                 {
                     return index + (addSearchstringLength ? searchString.Length : 0);
@@ -48,10 +70,20 @@ namespace CreateSheetsFromVideo
             return -1;
         }
 
-        public static int FindIndexAfter(this string text, int startIndex, string searchString, bool addSearchstringLength = false)
+        public static int FindIndexAfter(this string text, int startIndex, string searchString, bool addSearchstringLength = false, int maxIndexToSearch = int.MaxValue)
         {
-            for (int index = startIndex; index < text.Length; index++)
+            if (startIndex < 0)
             {
+                throw new Exception("StartIndex invalid");
+            }
+
+            for (int index = startIndex; index + searchString.Length <= text.Length; index++)
+            {
+                if (index > maxIndexToSearch)
+                {
+                    break;
+                }
+
                 if (text.Substring(index, searchString.Length) == searchString)
                 {
                     return index + (addSearchstringLength ? searchString.Length : 0);

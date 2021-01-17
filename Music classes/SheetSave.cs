@@ -25,7 +25,7 @@ namespace CreateSheetsFromVideo
             OriginStartTime = originStartTime;
             Tones = tones;
             BeatHits = beatHits;
-            BeatValues = new BeatValues(BeatHits, tones, originStartTime);
+            BeatValues = new BeatValues(BeatHits, tones);
         }
 
         public static SheetSave Load(string path)

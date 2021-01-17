@@ -12,8 +12,13 @@ namespace CreateSheetsFromVideo
 
     public static class Extensions
     {
-        public static string Cut(this StringBuilder builder, int startIndex, int length)
+        public static string CutOut(this StringBuilder builder, int startIndex, int length)
         {
+            if (length < 0)
+            {
+                throw new Exception("Length must be positive");
+            }
+
             string textCutOut = builder.ToString(startIndex, length);
             builder.Remove(startIndex, length);
             return textCutOut;

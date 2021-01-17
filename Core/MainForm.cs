@@ -23,7 +23,8 @@ using VideoLibrary;
 using WMPLib;
 using System.Runtime.ExceptionServices;
 using System.Diagnostics;
-
+using XmlNote = MusicXmlSchema.Note;
+using XmlSchemaClassGenerator;
 
 namespace CreateSheetsFromVideo
 {
@@ -69,9 +70,23 @@ namespace CreateSheetsFromVideo
 
         private static MainForm Instance;
 
+
+
         public MainForm()
         {
-            Instance = this;
+            // Create schema files
+            if (false)
+            {
+                Tools.CreateSchemaFiles();
+                return;
+            }
+
+            // Add lyrics to left hand bass
+            if (true)
+            {
+                Tools.AddBassLyrics();
+                return;
+            }
 
             // SaveYoutubeVideo
             if (false)
@@ -82,6 +97,7 @@ namespace CreateSheetsFromVideo
                 Debugger.Break();
             }
 
+            Instance = this;
             InitializeComponent();
             InitializeUI();
             InitializeNoteBar();
