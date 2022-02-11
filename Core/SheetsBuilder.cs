@@ -22,6 +22,7 @@ namespace CreateSheetsFromVideo
 {
     public class SheetsBuilder
     {
+        private const string Up = "\""; // Indicates ThirdBass
         public const string BackupFootnote = "Backup";
 
         // Technical settings
@@ -234,104 +235,374 @@ namespace CreateSheetsFromVideo
             }
 
             return xmlNote;
-    }
+        }
 
-        public static string CreateBassText(params Pitch[] pitches)
+
+        public static string CreateBassLyrics(List<Pitch> pitches, List<List<Pitch>> precedingPitchesList, int circleOfFifthsPosition, out bool isOrdinaryChord)
         {
-            switch (pitches.Length)
+            const bool ReplaceBbyH = true;
+            const bool Print4thChordNote = false;
+            const bool ExtendTwoNotesToMolAndDur = false;
+
+            List<Pitch> precedingPitches = precedingPitchesList.LastOrDefault();
+
+            /// Make Gis to As and so on...
+            string ApplyFifths(string text)
+            {
+                if (circleOfFifthsPosition == -6)
+                {
+                    switch (text)
+                    {
+                        case "Gis":
+                            return "As";
+                        case "A":
+                            return "F" + Up;
+                        case "Cis":
+                            return "Des";
+                        case "Fis":
+                            return "Ges";
+                        case "Ē":
+                            return "As";
+                        case "H̅":
+                            return "Es";
+                        case "Fis" + Up:
+                            return "Bes";
+                    }
+                }
+
+                return text;
+            }
+
+            isOrdinaryChord = false;
+            string lyrics = "";
+
+            // Remove redundant tones (This is done in Tools.AddBassLyrics)
+            //pitches = pitches.Distinct().ToList();
+
+            // Check if we have the pattern A-Adur-A-Adur-... so we can write only A-Adur
+            List<List<Pitch>> allPitchesList = new List<List<Pitch>>(precedingPitchesList) { pitches };
+            if (allPitchesList.Count >= 3)
+            {
+                for (int i = 0; i < allPitchesList.Count - 2; i++)
+                {
+                    if (!Helper.ListsEqual(allPitchesList[i], allPitchesList[i + 2]))
+                    {
+                        break;
+                    }
+                }
+
+                return "";
+            }
+            if (precedingPitchesList.Count == 2)
+            {
+                if (Helper.ListsEqual(precedingPitchesList[0], pitches))
+                {
+                    return "";
+                }
+            }
+            else if (precedingPitchesList.Count == 3)
+            {
+                if (Helper.ListsEqual(precedingPitchesList[0], precedingPitchesList[2])
+                    && Helper.ListsEqual(precedingPitchesList[1], pitches))
+                {
+                    return "";
+                }
+            }
+
+            switch (pitches.Count)
             {
                 case 1:
-                    return pitches[0].ToString();
-
+                    lyrics = pitches[0].ToString();
+                    lyrics = ApplyFifths(lyrics);
+                    break;
                 case 2:
-                    return $"{pitches[0]}+{pitches[1]}";
+                {
+                    if (precedingPitches?.Count == 1)
+                    {
+                        // Check if the preceding pitch complements the current pitches to form a chord
+                        List<Pitch> mergedPitches = new List<Pitch>(pitches) { precedingPitches[0] }.Distinct().ToList();
+                        string text = CreateBassLyrics(mergedPitches, new List<List<Pitch>>(), circleOfFifthsPosition, out isOrdinaryChord);
+                        if (isOrdinaryChord)
+                        {
+                            return text;
+                        }
+                    }
+                    if (ExtendTwoNotesToMolAndDur && pitches.Count == 2)
+                    {
+                        List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
+                        {
+                            new PitchIntegerPair(pitches[0]),
+                            new PitchIntegerPair(pitches[1]),
+                        }.OrderBy(pair => pair.Integer).ToList();
 
+                        int delta = pairs[1].Integer - pairs[0].Integer;
+
+                        Pitch pitch = Pitch.A;
+                        AcchordType acchordType = AcchordType.Undefined;
+
+                        bool succes = true;
+
+                        // Dur: 4 and 3
+                        if (delta == 4)
+                        {
+                            pitch = pairs[0].Pitch;
+                            acchordType = AcchordType.Dur;
+
+                        }
+                        else if (delta == 9)
+                        {
+                            pitch = pairs[1].Pitch;
+                            acchordType = AcchordType.Mol;
+                        }
+                        else if (delta == 5)
+                        {
+                            pitch = pitches[1];
+                            foreach (int i in Enumerable.Range(0, 5))
+                            {
+                                pitch = pitch.Next();
+                            }
+                            acchordType = AcchordType.Dur;
+                        }
+                        // Mol 3 and 4
+                        else if (delta == 3)
+                        {
+                            pitch = pairs[0].Pitch;
+                            acchordType = AcchordType.Mol;
+                        }
+                        else
+                        {
+                            succes = false;
+                        }
+
+                        lyrics = $"{ApplyFifths(pitch.ToString())}{StringForAcchordType[acchordType]}";
+
+                        if (succes)
+                        {
+                            goto end;
+                        }
+                    }
+                    lyrics = ApplyFifths(pitches[0].ToString()) + ApplyFifths(pitches[1].ToString());
+                    break;
+                }
                 case 3:
-                    Pitch firstPitch = pitches[0];
-                    Pitch secondPitch = pitches[1];
-                    Pitch thirdPitch = pitches[2];
+                    {
+                        isOrdinaryChord = true;
 
-                    List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
+                        Pitch firstPitch = pitches[0];
+                        Pitch secondPitch = pitches[1];
+                        Pitch thirdPitch = pitches[2];
+
+                        List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
                     {
                         new PitchIntegerPair(firstPitch),
                         new PitchIntegerPair(secondPitch),
                         new PitchIntegerPair(thirdPitch),
                     }.OrderBy(pair => pair.Integer).ToList();
 
-                    int delta1 = pairs[1].Integer - pairs[0].Integer;
-                    int delta2 = pairs[2].Integer - pairs[1].Integer;
+                        int delta1 = pairs[1].Integer - pairs[0].Integer;
+                        int delta2 = pairs[2].Integer - pairs[1].Integer;
 
-                    Pitch pitch = Pitch.A;
-                    AcchordType acchordType = AcchordType.Undefined;
+                        Pitch pitch = Pitch.A;
+                        AcchordType acchordType = AcchordType.Undefined;
 
-                    // Dur
-                    if (delta1 == 4 && delta2 == 3)
-                    {
-                        pitch = pairs[0].Pitch; // correct
-                        acchordType = AcchordType.Dur;
-                    }
-                    else if (delta1 == 3 && delta2 == 5)
-                    {
-                        pitch = pairs[2].Pitch;
-                        acchordType = AcchordType.Dur;
-                    }
-                    else if (delta1 == 5 && delta2 == 4)
-                    {
-                        pitch = pairs[1].Pitch;
-                        acchordType = AcchordType.Dur;
-                    }
-                    // Mol
-                    else if (delta1 == 3 && delta2 == 4)
-                    {
-                        pitch = pairs[0].Pitch;
-                        acchordType = AcchordType.Mol;
-                    }
-                    else if (delta1 == 4 && delta2 == 5)
-                    {
-                        pitch = pairs[2].Pitch;
-                        acchordType = AcchordType.Mol;
-                    }
-                    else if (delta1 == 5 && delta2 == 3)
-                    {
-                        pitch = pairs[1].Pitch; // Correct
-                        acchordType = AcchordType.Mol;
-                    }
-                    else if (delta1 == 2 && delta2 == 4)
-                    {
-                        pitches = pitches;
+                        // Dur
+                        if (delta1 == 4 && delta2 == 3)
+                        {
+                            pitch = pairs[0].Pitch; // correct
+                            acchordType = AcchordType.Dur;
+                        }
+                        else if (delta1 == 3 && delta2 == 5)
+                        {
+                            pitch = pairs[2].Pitch;
+                            acchordType = AcchordType.Dur;
+                        }
+                        else if (delta1 == 5 && delta2 == 4)
+                        {
+                            pitch = pairs[1].Pitch;
+                            acchordType = AcchordType.Dur;
+                        }
+                        // Mol
+                        else if (delta1 == 3 && delta2 == 4)
+                        {
+                            pitch = pairs[0].Pitch;
+                            acchordType = AcchordType.Mol;
+                        }
+                        else if (delta1 == 4 && delta2 == 5)
+                        {
+                            pitch = pairs[2].Pitch;
+                            acchordType = AcchordType.Mol;
+                        }
+                        else if (delta1 == 5 && delta2 == 3)
+                        {
+                            pitch = pairs[1].Pitch;
+                            acchordType = AcchordType.Mol;
+                        }
+                        // Sept
+                        else if (delta1 == 4 && delta2 == 6)
+                        {
+                            pitch = pairs[0].Pitch;
+                            acchordType = AcchordType.Sept;
+                        }
+                        else if (delta1 == 2 && delta2 == 4)
+                        {
+                            pitch = pairs[1].Pitch;
+                            acchordType = AcchordType.Sept;
+                        }
+                        else if (delta1 == 6 && delta2 == 2)
+                        {
+                            pitch = pairs[2].Pitch;
+                            acchordType = AcchordType.Sept;
+                        }
+                        // Min
+                        else if (delta1 == 3 && delta2 == 3)
+                        {
+                            pitch = pairs[0].Pitch;
+                            acchordType = AcchordType.Min;
+                        }
+                        else if (delta1 == 6 && delta2 == 3)
+                        {
+                            pitch = pairs[1].Pitch;
+                            acchordType = AcchordType.Min;
+                        }
+                        else if (delta1 == 3 && delta2 == 6)
+                        {
+                            pitch = pairs[2].Pitch;
+                            acchordType = AcchordType.Min;
+                        }
+                        else
+                        {
+                            // Non-default
+                            isOrdinaryChord = false;
 
-                        string text = "" + pairs[0].Pitch + pairs[1].Pitch + BassStringForThirdBass[pairs[2].Pitch];
-                        return text;
-                    }
-                    else if (delta1 == 3 && delta2 == 3)
-                    {
-                        string text = "" + pairs[2].Pitch + BassStringForThirdBass[pairs[0].Pitch] + pairs[1].Pitch;
-                        return text;
-                    }
-                    else if (delta1 == 3 && delta2 == 6)
-                    {
-                        string text = "" + pairs[1].Pitch + BassStringForThirdBass[pairs[2].Pitch] + pairs[0].Pitch;
-                        return text;
-                    }
-                    else if (delta1 == 6 && delta2 == 3)
-                    {
-                        string text = "" + pairs[0].Pitch + BassStringForThirdBass[pairs[1].Pitch] + pairs[2].Pitch;
-                        return text;
-                    }
-                    else
-                    {
-                        Debugger.Break();
-                    }
-                    string bassText = $"{pitch}{StringForAcchordType[acchordType]}";
-                    return bassText;
+                            string CreateCustomBassLyrics(Pitch pitch0, Pitch pitch1, Pitch pitch2, params int[] indexesToGetThirdBass)
+                            {
+                                string text = "";
+                                string first = indexesToGetThirdBass.Contains(0) ? BassStringForThirdBass[pitch0] : pitch0.ToString();
+                                text += ApplyFifths(first);
+                                string second = indexesToGetThirdBass.Contains(1) ? BassStringForThirdBass[pitch1] : pitch1.ToString();
+                                text += ApplyFifths(second);
+                                string third = indexesToGetThirdBass.Contains(2) ? BassStringForThirdBass[pitch2] : pitch2.ToString();
+                                text += ApplyFifths(third);
+                                return text;
+                            }
 
+                            if (delta1 == 2 && delta2 == 4)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[0].Pitch, pairs[1].Pitch, pairs[2].Pitch, 2);
+                            }
+                            else if (delta1 == 3 && delta2 == 3)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[0].Pitch, pairs[1].Pitch, 1);
+                            }
+                            else if (delta1 == 3 && delta2 == 6)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[1].Pitch, pairs[2].Pitch, pairs[0].Pitch, 1);
+                            }
+                            else if (delta1 == 6 && delta2 == 3)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[0].Pitch, pairs[1].Pitch, pairs[2].Pitch, 1);
+                            }
+                            else if (delta1 == 4 && delta2 == 2)
+                            {
+                                // e.g. EE'Fis'
+                                lyrics = CreateCustomBassLyrics(pairs[0].Pitch, pairs[1].Pitch, pairs[2].Pitch, 1, 2);
+                            }
+                            else if (delta1 == 5 && delta2 == 2)
+                            {
+                                // e.g. E'H'Fis'
+                                lyrics = CreateCustomBassLyrics(pairs[0].Pitch, pairs[1].Pitch, pairs[2].Pitch, 0, 1, 2);
+                            }
+                            else if (delta1 == 2 && delta2 == 5)
+                            {
+                                // e.g. EsBesF
+                                lyrics = CreateCustomBassLyrics(pairs[0].Pitch, pairs[2].Pitch, pairs[1].Pitch);
+                            }
+                            else if (delta1 == 3 && delta2 == 2)
+                            {
+                                // e.g. GisBesF (Must be covnerted to as!)
+                                lyrics = CreateCustomBassLyrics(pairs[1].Pitch, pairs[2].Pitch, pairs[0].Pitch);
+                            }
+                            else if (delta1 == 1 && delta2 == 3)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[1].Pitch, pairs[0].Pitch, 2);
+                            }
+                            else if (delta1 == 1 && delta2 == 6)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[1].Pitch, pairs[0].Pitch, pairs[2].Pitch, 1, 2);
+                            }
+                            else if (delta1 == 6 && delta2 == 2)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[1].Pitch, pairs[2].Pitch, pairs[0].Pitch, 2);
+                            }
+                            else if (delta1 == 4 && delta2 == 4)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[0].Pitch, pairs[1].Pitch, pairs[2].Pitch, 2);
+                            }
+                            else if (delta1 == 2 && delta2 == 7)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[1].Pitch, pairs[0].Pitch, 1);
+                            }
+                            else if (delta1 == 5 && delta2 == 5)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[1].Pitch, pairs[0].Pitch);
+                            }
+                            else if (delta1 == 1 && delta2 == 7)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[0].Pitch, pairs[2].Pitch, pairs[1].Pitch, 1);
+                            }
+                            else if (delta1 == 2 && delta2 == 3)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[0].Pitch, pairs[1].Pitch);
+                            }
+                            else if (delta1 == 7 && delta2 == 3)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[0].Pitch, pairs[1].Pitch);
+                            }
+                            else if (delta1 == 2 && delta2 == 8)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[0].Pitch, pairs[1].Pitch);
+                            }
+                            else if (delta1 == 8 && delta2 == 2)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[1].Pitch, pairs[2].Pitch, pairs[0].Pitch);
+                            }
+                            else if (delta1 == 3 && delta2 == 7)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[1].Pitch, pairs[2].Pitch, pairs[0].Pitch);
+                            }
+                            else if (delta1 == 7 && delta2 == 4)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[0].Pitch, pairs[1].Pitch);
+                            }
+                            else if (delta1 == 4 && delta2 == 1)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[0].Pitch, pairs[1].Pitch, 1);
+                            }
+                            else
+                            {
+                                Debugger.Break();
+                            }
+
+                            break;
+                        }
+
+                        if (acchordType == AcchordType.Undefined)
+                        {
+                            Debugger.Break();
+                        }
+
+                        lyrics = $"{ApplyFifths(pitch.ToString())}{StringForAcchordType[acchordType]}";
+
+                        break;
+                    }
                 case 4:
-                    firstPitch = pitches[0];
-                    secondPitch = pitches[1];
-                    thirdPitch = pitches[2];
-                    Pitch fourthPitch = pitches[3];
+                    {
+                        Pitch firstPitch = pitches[0];
+                        Pitch secondPitch = pitches[1];
+                        Pitch thirdPitch = pitches[2];
+                        Pitch fourthPitch = pitches[3];
 
-                    pairs = new List<PitchIntegerPair>()
+                        List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
                     {
                         new PitchIntegerPair(firstPitch),
                         new PitchIntegerPair(secondPitch),
@@ -339,32 +610,86 @@ namespace CreateSheetsFromVideo
                         new PitchIntegerPair(fourthPitch),
                     }.OrderBy(pair => pair.Integer).ToList();
 
-                    delta1 = pairs[1].Integer - pairs[0].Integer;
-                    delta2 = pairs[2].Integer - pairs[1].Integer;
-                    int delta3 = pairs[3].Integer - pairs[2].Integer;
+                        int delta1 = pairs[1].Integer - pairs[0].Integer;
+                        int delta2 = pairs[2].Integer - pairs[1].Integer;
+                        int delta3 = pairs[3].Integer - pairs[2].Integer;
 
-                    pitch = Pitch.A;
-                    acchordType = AcchordType.Undefined;
-                    if (delta1 == 2 && delta2 == 3 && delta3 == 4)
-                    {
-                        pitch = pairs[1].Pitch;
-                        acchordType = AcchordType.SeptMin;
+                        bool success = false;
+                        // Take first 3 to create a dur/mol/sept/min
+                        lyrics = CreateBassLyrics(pitches.Take(3).ToList(), precedingPitchesList?.Take(3).ToList(), circleOfFifthsPosition, out success)
+                            + (Print4thChordNote ? pitches[3].ToString() : "");
+                        if (!success)
+                        {
+                            // Take last 3 to create accord
+                            lyrics = CreateBassLyrics(pitches.Skip(1).ToList(), precedingPitchesList?.Skip(1).ToList(), circleOfFifthsPosition, out success)
+                                + (Print4thChordNote ? pitches[1].ToString() : "");
+                        }
+
+                        //pitch = Pitch.A;
+                        //acchordType = AcchordType.Undefined;
+                        //if (delta1 == 2 && delta2 == 3 && delta3 == 4)
+                        //{
+                        //    pitch = pairs[1].Pitch;
+                        //    acchordType = AcchordType.Min;
+                        //}
+                        //else if (delta1 == 2 && delta2 == 4 && delta3 == 3)
+                        //{
+                        //    pitch = pairs[3].Pitch;
+                        //    acchordType = AcchordType.Min;
+                        //}
+                        //else
+                        //{
+                        //    Debugger.Break();
+                        //}
+
+                        //if (acchordType == AcchordType.Undefined)
+                        //{
+                        //    Debugger.Break();
+                        //}
+                        //lyrics = $"{pitch}{StringForAcchordType[acchordType]}";
+                        break;
                     }
-                    else if (delta1 == 2 && delta2 == 4 && delta3 == 3)
-                    {
-                        pitch = pairs[3].Pitch;
-                        acchordType = AcchordType.SeptMin;
-                    }
-                    else
-                    {
-                        Debugger.Break();
-                    }
-                    bassText = $"{pitch}{StringForAcchordType[acchordType]}";
-                    return bassText;
                 default:
-                    return string.Join("", pitches);
+                    lyrics = string.Join("", pitches);
+                    break;
             }
-            
+
+        end:
+            if (ReplaceBbyH)
+            {
+                lyrics = lyrics.Replace("B", "H");
+                lyrics = lyrics.Replace("B̅", "H̅");
+                lyrics = lyrics.Replace("Hes", "B");
+                lyrics = lyrics.Replace("H̅es", "B̅");
+            }
+
+            if (true)
+            {
+                lyrics = lyrics.Replace("is", "#");
+                lyrics = lyrics.Replace("es", "♭");
+                lyrics = lyrics.Replace("s", "♭");
+            }
+
+            // When e.g. Dmol follows D, we can write only "mol"
+            if (isOrdinaryChord
+                && precedingPitchesList?.Count == 1
+                && CreateBassLyrics(precedingPitches, new List<List<Pitch>>(), circleOfFifthsPosition, out bool _).Substring(0, 1) == lyrics.Substring(0, 1))
+            {
+                lyrics = lyrics.Substring(1);
+            }
+
+            return lyrics;
+        }
+
+        private static string GetBassStringForThirdBass(Pitch pitch, int fifths)
+        {
+            //if (fifths == -6 && pitch == Pitch.)
+            if (BassStringForThirdBass.TryGetValue(pitch, out string bassString))
+            {
+                return bassString;
+            }
+
+            return pitch.ToString();
         }
 
         /// <summary>
@@ -377,25 +702,13 @@ namespace CreateSheetsFromVideo
             [Pitch.E] = "C̄",
             [Pitch.F] = "C̄is",
             [Pitch.G] = "Ēs",
-            [Pitch.A] = "F‾",
+            [Pitch.A] = "F" + Up,
             [Pitch.B] = "Ḡ",
             [Pitch.Cis] = "Ā",
-            [Pitch.Es] = "B̅",
-            [Pitch.Fis] = "D‾",
+            [Pitch.Es] = "B̅es",
+            [Pitch.Fis] = "D" + Up,
             [Pitch.Gis] = "Ē",
-            [Pitch.Bes] = "F‾is",
-            //[Pitch.C] = "C̄",
-            //[Pitch.D] = "D‾",
-            //[Pitch.E] = "Ē",
-            //[Pitch.F] = "F‾",
-            //[Pitch.G] = "Ḡ",
-            //[Pitch.A] = "Ā",
-            //[Pitch.B] = "B̅",
-            //[Pitch.Cis] = "C̄is",
-            //[Pitch.Es] = "Ēs",
-            //[Pitch.Fis] = "F‾is",
-            //[Pitch.Gis] = "Ḡis",
-            //[Pitch.Bes] = "B̅es",
+            [Pitch.Bes] = "Fis" + Up,
         };
 
         private static Dictionary<AcchordType, string> StringForAcchordType = new Dictionary<AcchordType, string>()
@@ -404,86 +717,8 @@ namespace CreateSheetsFromVideo
             [AcchordType.Dur] = "dur",
             [AcchordType.Mol] = "mol",
             [AcchordType.Sept] = "7",
-            [AcchordType.SeptMin] = "7min",
+            [AcchordType.Min] = "min",
         };
-
-        public static void AddBassText(Tone tone)
-        {
-            ////Add chord text for left hand (e.g.Cmol)
-            //if (leftTones.Contains(tone) && tone.ChordTones.Count > 0)
-            //    {
-            //        string bassText = "_";
-            //        if (tone.ChordTones.Count == 0)
-            //        {
-            //            bassText = note.GetPitchString();
-            //        }
-            //        else if (tone.ChordTones.Count == 2)
-            //        {
-            //            Pitch firstPitch = tone.Pitch;
-            //            Pitch secondPitch = tone.ChordTones[0].Pitch;
-            //            Pitch thirdPitch = tone.ChordTones[1].Pitch;
-
-            //            List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
-            //            {
-            //                new PitchIntegerPair(firstPitch),
-            //                new PitchIntegerPair(secondPitch),
-            //                new PitchIntegerPair(thirdPitch),
-            //            }.OrderBy(pair => pair.Integer).ToList();
-
-            //            int delta1 = pairs[1].Integer - pairs[0].Integer;
-            //            int delta2 = pairs[2].Integer - pairs[1].Integer;
-
-            //            Pitch pitch = Pitch.A;
-            //            AcchordType acchordType = AcchordType.SeptMin;
-
-            //            // Dur
-            //            if (delta1 == 4 && delta2 == 3)
-            //            {
-            //                pitch = pairs[0].Pitch; // correct
-            //                acchordType = AcchordType.Dur;
-            //            }
-            //            else if (delta1 == 3 && delta2 == 5)
-            //            {
-            //                pitch = pairs[2].Pitch;
-            //                acchordType = AcchordType.Dur;
-            //            }
-            //            else if (delta1 == 5 && delta2 == 4)
-            //            {
-            //                pitch = pairs[1].Pitch;
-            //                acchordType = AcchordType.Dur;
-            //            }
-            //            // Mol
-            //            else if (delta1 == 3 && delta2 == 4)
-            //            {
-            //                pitch = pairs[0].Pitch;
-            //                acchordType = AcchordType.Mol;
-            //            }
-            //            else if (delta1 == 4 && delta2 == 5)
-            //            {
-            //                pitch = pairs[2].Pitch;
-            //                acchordType = AcchordType.Mol;
-            //            }
-            //            else if (delta1 == 5 && delta2 == 3)
-            //            {
-            //                pitch = pairs[1].Pitch; // Correct
-            //                acchordType = AcchordType.Mol;
-            //            }
-
-            //            bassText = $"{pitch}{acchordType}";
-            //        }
-
-            //        // Add bassText as "Lyric"
-            //        note.Lyric.Add(new Lyric()
-            //        {
-            //            Text = new TextElementData()
-            //            {
-            //                Value = bassText,
-            //                FontSize = "10"
-            //            }
-            //        });
-            //    }
-        }
-
 
         private static ScorePartwise CreateScorePartwise(string title, double beatDuration, bool addLeftPart, bool addRightHandsPart2, out ScorePartwisePart leftHandsPart, out ScorePartwisePart rightHandsPart, out ScorePartwisePart rightHandsPart2)
         {

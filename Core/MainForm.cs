@@ -84,7 +84,7 @@ namespace CreateSheetsFromVideo
             // Add lyrics to left hand bass
             if (true)
             {
-                Tools.AddBassLyrics();
+                //Tools.AddBassLyrics();
                 return;
             }
 

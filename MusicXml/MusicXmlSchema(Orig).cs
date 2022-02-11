@@ -25237,6 +25237,9 @@ namespace MusicXmlSchema
             return $"V{Voice}: {PitchString}, {Type?.Value}{DottingString} ({Portion})";
         }
 
+        /// <summary>
+        ///   Is FootNote.Value == <see cref="CreateSheetsFromVideo.SheetsBuilder.BackupFootnote"/>
+        /// </summary>
         public bool IsBackup => Footnote?.Value == CreateSheetsFromVideo.SheetsBuilder.BackupFootnote;
 
         public double Portion
@@ -25497,7 +25500,7 @@ namespace MusicXmlSchema
             {
                 return this.notations;
             }
-            private set
+            set
             {
                 this.notations = value;
             }
@@ -25789,40 +25792,64 @@ namespace MusicXmlSchema
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     public partial class Pitch
     {
-        public CreateSheetsFromVideo.Pitch OwnPitch
+        private static readonly Dictionary<string, string> CorrectPitchDict = new Dictionary<string, string>()
+        {
+            ["Dis"] = "Es",
+            ["Ees"] = "Es",
+            ["Aes"] = "Gis",
+            ["Ges"] = "Fis",
+            ["Eis"] = "F",
+            ["Bis"] = "C",
+            ["Des"] = "Cis",
+            ["Ces"] = "B",
+            ["Fes"] = "E",
+        };
+
+        public CreateSheetsFromVideo.Pitch ThisAppsPitch
         {
             get
             {
+                Step step = this.Step;
+                decimal alter = this.Alter;
+
+
+                if (alter == -2)
+                {
+                    step = step.Previous();
+
+                    if (step == Step.C || step == Step.F)
+                    {
+                        alter = -1;
+                    }
+                }
+                else if (alter == 2)
+                {
+                    step = step.Next();
+
+                    if (step == Step.B || step == Step.E)
+                    {
+                        alter = 1;
+                    }
+                }
+
                 string alterString = "";
-                if (Alter == -1)
+                if (alter == -1)
                 {
                     alterString = "es";
                 }
-                else if (Alter == 1)
+                else if (alter == 1)
                 {
                     alterString = "is";
                 }
-                string toParse = Step + alterString;
 
-                // Substitute
-                if (toParse == "Dis")
+                string pitchString = step + alterString;
+
+                if (CorrectPitchDict.TryGetValue(pitchString, out string correctedValue))
                 {
-                    toParse = "Es";
-                }
-                else if (toParse == "Ees")
-                {
-                    toParse = "Es";
-                }
-                else if (toParse == "Aes")
-                {
-                    toParse = "Gis";
-                }
-                else if (toParse == "Ges")
-                {
-                    toParse = "Fis";
+                    pitchString = correctedValue;
                 }
 
-                var pitch = CreateSheetsFromVideo.Helper.ParseEnum<CreateSheetsFromVideo.Pitch>(toParse);
+                CreateSheetsFromVideo.Pitch pitch = Helper.ParseEnum<CreateSheetsFromVideo.Pitch>(pitchString);
                 return pitch;
             }
         }

@@ -13,7 +13,7 @@ namespace CreateSheetsFromVideo
         Dur,
         Mol,
         Sept,
-        SeptMin
+        Min
     }
 
     enum HandType

@@ -35,10 +35,9 @@ namespace CreateSheetsFromVideo
             return duration;
         }
 
-        public static void AddBassLyrics()
+        public static void AddBassLyrics(string musicXmlPath, bool removeStaccato = true)
         {
-            string path = @"C:\Users\Dustin\Desktop\MusicXmls\KassTheme.musicxml"; // ErsteTakte
-            StringBuilder builder = new StringBuilder(File.ReadAllText(path));
+            StringBuilder builder = new StringBuilder(File.ReadAllText(musicXmlPath));
             string scoreString = builder.ToString();
             
             /// Replace backups by notes (to keep order)
@@ -67,54 +66,124 @@ namespace CreateSheetsFromVideo
                 XmlSerializer serializer = new XmlSerializer(typeof(ScorePartwise));
                 ScorePartwise scorePartwise = serializer.Deserialize(reader) as ScorePartwise;
 
+                if (string.IsNullOrWhiteSpace(scorePartwise.MovementTitle))
+                {
+                    scorePartwise.MovementTitle = System.IO.Path.GetFileNameWithoutExtension(musicXmlPath);
+                    scorePartwise.MovementTitle = "MS Anne";
+                }
+
+                int circleOfFifthsPosition = Convert.ToInt32(scorePartwise.Part[0].Measure[0].Attributes[0].Key[0].Fifths);
+
                 // Go through measures
                 int measureNumberXml = 0;
-                foreach (ScorePartwisePartMeasure measure in scorePartwise.Part[0].Measure)
+                for (int partNumber = 0; partNumber < Math.Min(2, scorePartwise.Part.Count); partNumber++)
                 {
-                    measureNumberXml++;
-                    // Get notes of current beat
-                    List<XmlNote> notes = measure.Note.Where(note =>
-                       note.Staff == "2"
-                    && note.Rest == null).ToList();
-
-                    if (notes.Count > 0)
+                    foreach (ScorePartwisePartMeasure measure in scorePartwise.Part[partNumber].Measure)
                     {
-                        // Iterate notes
-                        for (int i = 0; i < notes.Count; i++)
+                        //// Setup measure/Takt
+                        // NewPages are invalid due to added lyrics: Remove them
+                        if (measure.Print.Count > 0)
                         {
-                            if (notes[i].IsChord())
-                                continue;
+                            measure.Print[0].NewPage = YesNo.No;
+                        }
+                        if (measure.Attributes.Count > 0 && measure.Attributes[0].Key.Count > 0)
+                        {
+                            // Write # and b over each note instead of using key
+                            measure.Attributes[0].Key[0].Fifths = "0";
+                        }
 
-                            XmlNote mainNote = notes[i];
-                            List<Pitch> pitches = new List<Pitch>();
-                            pitches.Add(mainNote.Pitch.OwnPitch);
+                        measureNumberXml++;
 
-                            for (int j = i + 1; j <= notes.Count; j++)
+                        foreach (XmlNote note in measure.Note)
+                        {
+                            if (removeStaccato)
                             {
-                                if (j < notes.Count && notes[j].IsChord())
+                                Articulations articulations = note.Notations.FirstOrDefault()?.Articulations.FirstOrDefault();
+                                if (articulations != null)
                                 {
-                                    if (mainNote.Duration != notes[j].Duration
-                                        || mainNote.Type.Value != notes[j].Type.Value)
-                                    {
-                                        Debugger.Break(); // Chord notes must have same duration
-                                    }
-
-                                    // Add pitch
-                                    pitches.Add(notes[j].Pitch.OwnPitch);
+                                    articulations.Staccato.Clear();
                                 }
-                                else
+                            }
+                        }
+
+                        /// Insert lyrics for staff "2"
+                        // Get notes of current beat
+                        List<XmlNote> notes = measure.Note.Where(note => note.Staff == "2"
+                                                                      && note.Rest == null).ToList();
+                        if (partNumber == 1 && notes.Count == 0)
+                        {
+                            // Do not consider rests :(
+                            notes = measure.Note.Where(note => note.Rest == null).ToList();
+                            //notes = measure.Note.ToList();
+                        }
+
+                        if (notes.Count > 0)
+                        {
+                            // Clear on new measure
+                            List<List<Pitch>> previousPitchesList = new List<List<Pitch>>();
+
+                            // Iterate notes
+                            for (int i = 0; i < notes.Count; i++)
+                            {
+                                XmlNote mainNote = notes[i];
+
+                                //if (mainNote.Rest != null)
+                                //{
+                                //    previousPitches = null;
+                                //    continue;
+                                //}
+
+                                if (mainNote.IsChord() || mainNote.IsBackup)
+                                    continue;
+
+                                List<Pitch> pitches = new List<Pitch>();
+                                pitches.Add(mainNote.Pitch.ThisAppsPitch);
+
+                                for (int j = i + 1; j <= notes.Count; j++)
                                 {
-                                    // No: Set MainNote's lyrics
-                                    string lyrics = SheetsBuilder.CreateBassText(pitches.ToArray());
-                                    mainNote.Lyric.Add(new Lyric()
+                                    if (j < notes.Count && notes[j].IsChord())
                                     {
-                                        Text = new TextElementData()
+                                        if (mainNote.Duration != notes[j].Duration
+                                            || mainNote.Type.Value != notes[j].Type.Value)
                                         {
-                                            Value = lyrics,
-                                            FontSize = "9"
+                                            // Chord notes must have same duration!
+                                            Debugger.Break(); 
                                         }
-                                    });
-                                    break; // Next MainNote
+
+                                        // Collect pitch
+                                        pitches.Add(notes[j].Pitch.ThisAppsPitch);
+                                    }
+                                    else
+                                    {
+                                        if (measureNumberXml == 4)
+                                        { }
+
+
+                                        // Remove redundant tones
+                                        pitches = pitches.Distinct().ToList();
+
+                                        // Set MainNote's lyrics
+                                        string lyrics = SheetsBuilder.CreateBassLyrics(pitches, previousPitchesList, circleOfFifthsPosition, out bool _);
+
+                                        // Pitches must not be equal to print lyrics
+                                        if (previousPitchesList.Count == 0
+                                            || !Helper.ListsEqual(previousPitchesList.LastOrDefault(), pitches))
+                                        {
+                                            previousPitchesList.Add(pitches);
+                                            mainNote.Lyric.Add(new Lyric()
+                                            {
+                                                Text = new TextElementData()
+                                                {
+                                                    Value = lyrics,
+                                                    FontSize = "9",
+                                                    //Overline = overline ? "1" : "0", // Does not work (also not with FontStyleSpecified true)
+                                                }
+                                            });
+                                        }
+
+                                        // Set next MainNote...
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -123,14 +192,11 @@ namespace CreateSheetsFromVideo
 
                 using (StringWriter textWriter = new StringWriter())
                 {
-                    string newPath = Path.ChangeExtension(path, null) + "(withBass)" + Path.GetExtension(path);
+                    string savePath = System.IO.Path.ChangeExtension(musicXmlPath, null) + "(withBass)" + System.IO.Path.GetExtension(musicXmlPath);
 
-                    //serializer.Serialize(textWriter, scorePartwise);
-                    //string scoreAsString = textWriter.ToString();
-                    //File.WriteAllText(newPath, scoreAsString);
+                    SheetsBuilder.SaveScoreAsMusicXml(savePath, scorePartwise);
+                    Helper.OpenWithDefaultProgram(savePath);
 
-                    SheetsBuilder.SaveScoreAsMusicXml(newPath, scorePartwise);
-                    //SaveScoreAsMusicXml(newPath, scorePartwise);
                     Debugger.Break();
                 }
             }
