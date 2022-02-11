@@ -104,7 +104,8 @@ public static class Helper
     }
 
     /// <summary>
-    ///   a[0] equals b[0], a[1] equals b[1] and so on...
+    ///   Check if 2 lists have same content.
+    ///   Returns true when a[index] == b[index] for all indices.
     /// </summary>
     public static bool ListsEqual<T>(List<T> a, List<T> b)
     {

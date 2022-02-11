@@ -22,12 +22,13 @@ namespace CreateSheetsFromVideo
 {
     public class SheetsBuilder
     {
-        private const string Up = "\""; // Indicates ThirdBass
-        public const string BackupFootnote = "Backup";
-
         // Technical settings
         private const int OctaveOffset = -2;
         private const int FourDivisions = 1; // Divisions per Quarter (MuseScore does not care about this value)
+        private const string Up = "\""; // Indicates ThirdBass
+
+
+        public const string BackupFootnote = "Backup";
 
         private ScorePartwise scorePartwise;
         private ScorePartwisePart leftPart;
@@ -38,18 +39,6 @@ namespace CreateSheetsFromVideo
         ///   The counter of the current beat (2 because first beat is automatically created)
         /// </summary>
         private int beatNumber = 2;
-        private ScorePartwisePartMeasure CurrentMeasureRight => rightPart.Measure[beatNumber - 2];
-        private ScorePartwisePartMeasure CurrentMeasureRight2 => rightPart2.Measure[beatNumber - 2];
-        private ScorePartwisePartMeasure CurrentMeasureLeft => leftPart.Measure[beatNumber - 2];
-
-        /// <summary>
-        ///   Note that is later replaced by backup (must be a note to have correct placement in notes list)
-        /// </summary>
-        private XmlNote BackupPlaceholder => new XmlNote()
-        {
-            Duration = FourDivisions,
-            Footnote = new FormattedText() { Value = BackupFootnote },
-        };
 
         public SheetsBuilder(SheetSave save, string title)
         {
@@ -125,6 +114,19 @@ namespace CreateSheetsFromVideo
                 }
             }
         }
+
+        private ScorePartwisePartMeasure CurrentMeasureRight => rightPart.Measure[beatNumber - 2];
+        private ScorePartwisePartMeasure CurrentMeasureRight2 => rightPart2.Measure[beatNumber - 2];
+        private ScorePartwisePartMeasure CurrentMeasureLeft => leftPart.Measure[beatNumber - 2];
+
+        /// <summary>
+        ///   Note that is later replaced by backup (must be a note to have correct placement in notes list)
+        /// </summary>
+        private XmlNote BackupPlaceholder => new XmlNote()
+        {
+            Duration = FourDivisions,
+            Footnote = new FormattedText() { Value = BackupFootnote },
+        };
 
         void AddBeat()
         {
@@ -237,14 +239,22 @@ namespace CreateSheetsFromVideo
             return xmlNote;
         }
 
-
-        public static string CreateBassLyrics(List<Pitch> pitches, List<List<Pitch>> precedingPitchesList, int circleOfFifthsPosition, out bool isOrdinaryChord)
+        /// <summary>
+        ///   Creates the accord lyrics for the given pitches.
+        /// </summary>
+        /// <param name="chord"></param>
+        /// <param name="precedingChords">Contains all previous accords from current beat.</param>
+        /// <param name="circleOfFifthsPosition"></param>
+        /// <param name="isOrdinaryChord"></param>
+        /// <returns></returns>
+        public static string CreateBassLyrics(List<Pitch> chord, List<List<Pitch>> precedingChords, int circleOfFifthsPosition, out bool isOrdinaryChord)
         {
             const bool ReplaceBbyH = true;
             const bool Print4thChordNote = false;
             const bool ExtendTwoNotesToMolAndDur = false;
+            const bool SkipPeriodicRepititions = false;
 
-            List<Pitch> precedingPitches = precedingPitchesList.LastOrDefault();
+            List<Pitch> precedingPitches = precedingChords.LastOrDefault();
 
             /// Make Gis to As and so on...
             string ApplyFifths(string text)
@@ -279,40 +289,47 @@ namespace CreateSheetsFromVideo
             // Remove redundant tones (This is done in Tools.AddBassLyrics)
             //pitches = pitches.Distinct().ToList();
 
-            // Check if we have the pattern A-Adur-A-Adur-... so we can write only A-Adur
-            List<List<Pitch>> allPitchesList = new List<List<Pitch>>(precedingPitchesList) { pitches };
-            if (allPitchesList.Count >= 3)
+            if (SkipPeriodicRepititions)
             {
-                for (int i = 0; i < allPitchesList.Count - 2; i++)
+                List<List<Pitch>> allChords = new List<List<Pitch>>(precedingChords) { chord };
+
+                // Check all pitches of current measure if we have the pattern A-Adur-A-Adur-... so we can write only A-Adur
+                if (allChords.Count >= 3)
                 {
-                    if (!Helper.ListsEqual(allPitchesList[i], allPitchesList[i + 2]))
+                    for (int i = 0; i < allChords.Count - 2; i++)
                     {
-                        break;
+                        if (Helper.ListsEqual(allChords[i], allChords[i + 2]))
+                        {
+                            return "";
+                        }
                     }
                 }
 
-                return "";
-            }
-            if (precedingPitchesList.Count == 2)
-            {
-                if (Helper.ListsEqual(precedingPitchesList[0], pitches))
+                // Skip lyrics if they are the same to current pitches
+                if (allChords.Count == 3)
                 {
-                    return "";
+                    if (Helper.ListsEqual(allChords[0], allChords[2]))
+                    {
+                        return "";
+                    }
                 }
-            }
-            else if (precedingPitchesList.Count == 3)
-            {
-                if (Helper.ListsEqual(precedingPitchesList[0], precedingPitchesList[2])
-                    && Helper.ListsEqual(precedingPitchesList[1], pitches))
+
+                if (allChords.Count == 4)
                 {
-                    return "";
+                    // First and third are same + second and fourth are same: SKIP
+                    if (Helper.ListsEqual(allChords[0], allChords[2])
+                        && Helper.ListsEqual(allChords[1], allChords[3]))
+                    {
+                        return "";
+                    }
                 }
             }
 
-            switch (pitches.Count)
+
+            switch (chord.Count)
             {
                 case 1:
-                    lyrics = pitches[0].ToString();
+                    lyrics = chord[0].ToString();
                     lyrics = ApplyFifths(lyrics);
                     break;
                 case 2:
@@ -320,19 +337,19 @@ namespace CreateSheetsFromVideo
                     if (precedingPitches?.Count == 1)
                     {
                         // Check if the preceding pitch complements the current pitches to form a chord
-                        List<Pitch> mergedPitches = new List<Pitch>(pitches) { precedingPitches[0] }.Distinct().ToList();
+                        List<Pitch> mergedPitches = new List<Pitch>(chord) { precedingPitches[0] }.Distinct().ToList();
                         string text = CreateBassLyrics(mergedPitches, new List<List<Pitch>>(), circleOfFifthsPosition, out isOrdinaryChord);
                         if (isOrdinaryChord)
                         {
                             return text;
                         }
                     }
-                    if (ExtendTwoNotesToMolAndDur && pitches.Count == 2)
+                    if (ExtendTwoNotesToMolAndDur && chord.Count == 2)
                     {
                         List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
                         {
-                            new PitchIntegerPair(pitches[0]),
-                            new PitchIntegerPair(pitches[1]),
+                            new PitchIntegerPair(chord[0]),
+                            new PitchIntegerPair(chord[1]),
                         }.OrderBy(pair => pair.Integer).ToList();
 
                         int delta = pairs[1].Integer - pairs[0].Integer;
@@ -356,7 +373,7 @@ namespace CreateSheetsFromVideo
                         }
                         else if (delta == 5)
                         {
-                            pitch = pitches[1];
+                            pitch = chord[1];
                             foreach (int i in Enumerable.Range(0, 5))
                             {
                                 pitch = pitch.Next();
@@ -381,16 +398,16 @@ namespace CreateSheetsFromVideo
                             goto end;
                         }
                     }
-                    lyrics = ApplyFifths(pitches[0].ToString()) + ApplyFifths(pitches[1].ToString());
+                    lyrics = ApplyFifths(chord[0].ToString()) + ApplyFifths(chord[1].ToString());
                     break;
                 }
                 case 3:
                     {
                         isOrdinaryChord = true;
 
-                        Pitch firstPitch = pitches[0];
-                        Pitch secondPitch = pitches[1];
-                        Pitch thirdPitch = pitches[2];
+                        Pitch firstPitch = chord[0];
+                        Pitch secondPitch = chord[1];
+                        Pitch thirdPitch = chord[2];
 
                         List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
                     {
@@ -597,10 +614,10 @@ namespace CreateSheetsFromVideo
                     }
                 case 4:
                     {
-                        Pitch firstPitch = pitches[0];
-                        Pitch secondPitch = pitches[1];
-                        Pitch thirdPitch = pitches[2];
-                        Pitch fourthPitch = pitches[3];
+                        Pitch firstPitch = chord[0];
+                        Pitch secondPitch = chord[1];
+                        Pitch thirdPitch = chord[2];
+                        Pitch fourthPitch = chord[3];
 
                         List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
                     {
@@ -616,13 +633,13 @@ namespace CreateSheetsFromVideo
 
                         bool success = false;
                         // Take first 3 to create a dur/mol/sept/min
-                        lyrics = CreateBassLyrics(pitches.Take(3).ToList(), precedingPitchesList?.Take(3).ToList(), circleOfFifthsPosition, out success)
-                            + (Print4thChordNote ? pitches[3].ToString() : "");
+                        lyrics = CreateBassLyrics(chord.Take(3).ToList(), precedingChords?.Take(3).ToList(), circleOfFifthsPosition, out success)
+                            + (Print4thChordNote ? chord[3].ToString() : "");
                         if (!success)
                         {
                             // Take last 3 to create accord
-                            lyrics = CreateBassLyrics(pitches.Skip(1).ToList(), precedingPitchesList?.Skip(1).ToList(), circleOfFifthsPosition, out success)
-                                + (Print4thChordNote ? pitches[1].ToString() : "");
+                            lyrics = CreateBassLyrics(chord.Skip(1).ToList(), precedingChords?.Skip(1).ToList(), circleOfFifthsPosition, out success)
+                                + (Print4thChordNote ? chord[1].ToString() : "");
                         }
 
                         //pitch = Pitch.A;
@@ -650,7 +667,7 @@ namespace CreateSheetsFromVideo
                         break;
                     }
                 default:
-                    lyrics = string.Join("", pitches);
+                    lyrics = string.Join("", chord);
                     break;
             }
 
@@ -672,7 +689,7 @@ namespace CreateSheetsFromVideo
 
             // When e.g. Dmol follows D, we can write only "mol"
             if (isOrdinaryChord
-                && precedingPitchesList?.Count == 1
+                && precedingChords?.Count == 1
                 && CreateBassLyrics(precedingPitches, new List<List<Pitch>>(), circleOfFifthsPosition, out bool _).Substring(0, 1) == lyrics.Substring(0, 1))
             {
                 lyrics = lyrics.Substring(1);
