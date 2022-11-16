@@ -48,7 +48,10 @@ namespace CreateSheetsFromVideo
         All
     }
 
-    public enum Pitch
+    /// <summary>
+    ///   
+    /// </summary>
+    public enum PitchEnum
     {
         C,
         Cis,
@@ -77,7 +80,7 @@ namespace CreateSheetsFromVideo
 
     public static class PitchExtensions
     {
-        public static int GetAlter(this Pitch pitch)
+        public static int GetAlter(this PitchEnum pitch)
         {
             string pitchString = pitch.ToString();
             if (pitchString.Contains("is"))
@@ -91,7 +94,7 @@ namespace CreateSheetsFromVideo
             else return 0;
         }
 
-        public static Step GetStep(this Pitch pitch)
+        public static Step GetStep(this PitchEnum pitch)
         {
             if (Enum.TryParse(pitch.ToString().Substring(0, 1), out Step step))
             {
@@ -103,7 +106,7 @@ namespace CreateSheetsFromVideo
             }
         }
 
-        public static void ApplyAlter(this Pitch pitch, int alter)
+        public static void ApplyAlter(this PitchEnum pitch, int alter)
         {
 
         }

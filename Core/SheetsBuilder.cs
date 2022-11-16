@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Xml.Linq;
 using System.Xml.Serialization;
 using XmlNote = MusicXmlSchema.Note;
 
@@ -247,14 +248,14 @@ namespace CreateSheetsFromVideo
         /// <param name="circleOfFifthsPosition"></param>
         /// <param name="isOrdinaryChord"></param>
         /// <returns></returns>
-        public static string CreateBassLyrics(List<Pitch> chord, List<List<Pitch>> precedingChords, int circleOfFifthsPosition, out bool isOrdinaryChord)
+        public static string CreateBassLyrics(List<PitchEnum> chord, List<List<PitchEnum>> precedingChords, int circleOfFifthsPosition, out bool isOrdinaryChord)
         {
             const bool ReplaceBbyH = true;
             const bool Print4thChordNote = false;
             const bool ExtendTwoNotesToMolAndDur = false;
             const bool SkipPeriodicRepititions = false;
 
-            List<Pitch> precedingPitches = precedingChords.LastOrDefault();
+            List<PitchEnum> precedingPitches = precedingChords.LastOrDefault();
 
             /// Make Gis to As and so on...
             string ApplyFifths(string text)
@@ -291,7 +292,7 @@ namespace CreateSheetsFromVideo
 
             if (SkipPeriodicRepititions)
             {
-                List<List<Pitch>> allChords = new List<List<Pitch>>(precedingChords) { chord };
+                List<List<PitchEnum>> allChords = new List<List<PitchEnum>>(precedingChords) { chord };
 
                 // Check all pitches of current measure if we have the pattern A-Adur-A-Adur-... so we can write only A-Adur
                 if (allChords.Count >= 3)
@@ -337,8 +338,8 @@ namespace CreateSheetsFromVideo
                     if (precedingPitches?.Count == 1)
                     {
                         // Check if the preceding pitch complements the current pitches to form a chord
-                        List<Pitch> mergedPitches = new List<Pitch>(chord) { precedingPitches[0] }.Distinct().ToList();
-                        string text = CreateBassLyrics(mergedPitches, new List<List<Pitch>>(), circleOfFifthsPosition, out isOrdinaryChord);
+                        List<PitchEnum> mergedPitches = new List<PitchEnum>(chord) { precedingPitches[0] }.Distinct().ToList();
+                        string text = CreateBassLyrics(mergedPitches, new List<List<PitchEnum>>(), circleOfFifthsPosition, out isOrdinaryChord);
                         if (isOrdinaryChord)
                         {
                             return text;
@@ -354,7 +355,7 @@ namespace CreateSheetsFromVideo
 
                         int delta = pairs[1].Integer - pairs[0].Integer;
 
-                        Pitch pitch = Pitch.A;
+                        PitchEnum pitch = PitchEnum.A;
                         AcchordType acchordType = AcchordType.Undefined;
 
                         bool succes = true;
@@ -405,9 +406,9 @@ namespace CreateSheetsFromVideo
                     {
                         isOrdinaryChord = true;
 
-                        Pitch firstPitch = chord[0];
-                        Pitch secondPitch = chord[1];
-                        Pitch thirdPitch = chord[2];
+                        PitchEnum firstPitch = chord[0];
+                        PitchEnum secondPitch = chord[1];
+                        PitchEnum thirdPitch = chord[2];
 
                         List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
                     {
@@ -419,7 +420,7 @@ namespace CreateSheetsFromVideo
                         int delta1 = pairs[1].Integer - pairs[0].Integer;
                         int delta2 = pairs[2].Integer - pairs[1].Integer;
 
-                        Pitch pitch = Pitch.A;
+                        PitchEnum pitch = PitchEnum.A;
                         AcchordType acchordType = AcchordType.Undefined;
 
                         // Dur
@@ -491,7 +492,7 @@ namespace CreateSheetsFromVideo
                             // Non-default
                             isOrdinaryChord = false;
 
-                            string CreateCustomBassLyrics(Pitch pitch0, Pitch pitch1, Pitch pitch2, params int[] indexesToGetThirdBass)
+                            string CreateCustomBassLyrics(PitchEnum pitch0, PitchEnum pitch1, PitchEnum pitch2, params int[] indexesToGetThirdBass)
                             {
                                 string text = "";
                                 string first = indexesToGetThirdBass.Contains(0) ? BassStringForThirdBass[pitch0] : pitch0.ToString();
@@ -595,6 +596,14 @@ namespace CreateSheetsFromVideo
                             {
                                 lyrics = CreateCustomBassLyrics(pairs[2].Pitch, pairs[0].Pitch, pairs[1].Pitch, 1);
                             }
+                            else if (delta1 == 2 && delta2 == 2)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[0].Pitch, pairs[2].Pitch, pairs[1].Pitch, 1);
+                            }
+                            else if (delta1 == 1 && delta2 == 2)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[1].Pitch, pairs[2].Pitch, pairs[0].Pitch, 1, 2);
+                            }
                             else
                             {
                                 Debugger.Break();
@@ -614,10 +623,10 @@ namespace CreateSheetsFromVideo
                     }
                 case 4:
                     {
-                        Pitch firstPitch = chord[0];
-                        Pitch secondPitch = chord[1];
-                        Pitch thirdPitch = chord[2];
-                        Pitch fourthPitch = chord[3];
+                        PitchEnum firstPitch = chord[0];
+                        PitchEnum secondPitch = chord[1];
+                        PitchEnum thirdPitch = chord[2];
+                        PitchEnum fourthPitch = chord[3];
 
                         List<PitchIntegerPair> pairs = new List<PitchIntegerPair>()
                     {
@@ -690,7 +699,7 @@ namespace CreateSheetsFromVideo
             // When e.g. Dmol follows D, we can write only "mol"
             if (isOrdinaryChord
                 && precedingChords?.Count == 1
-                && CreateBassLyrics(precedingPitches, new List<List<Pitch>>(), circleOfFifthsPosition, out bool _).Substring(0, 1) == lyrics.Substring(0, 1))
+                && CreateBassLyrics(precedingPitches, new List<List<PitchEnum>>(), circleOfFifthsPosition, out bool _).Substring(0, 1) == lyrics.Substring(0, 1))
             {
                 lyrics = lyrics.Substring(1);
             }
@@ -698,7 +707,7 @@ namespace CreateSheetsFromVideo
             return lyrics;
         }
 
-        private static string GetBassStringForThirdBass(Pitch pitch, int fifths)
+        private static string GetBassStringForThirdBass(PitchEnum pitch, int fifths)
         {
             //if (fifths == -6 && pitch == Pitch.)
             if (BassStringForThirdBass.TryGetValue(pitch, out string bassString))
@@ -712,20 +721,20 @@ namespace CreateSheetsFromVideo
         /// <summary>
         ///   Returnt e.g. C̄ for Terzbass E (because easier to read)
         /// </summary>
-        private static Dictionary<Pitch, string> BassStringForThirdBass = new Dictionary<Pitch, string>()
+        private static Dictionary<PitchEnum, string> BassStringForThirdBass = new Dictionary<PitchEnum, string>()
         {
-            [Pitch.C] = "Ḡis",
-            [Pitch.D] = "B̅es",
-            [Pitch.E] = "C̄",
-            [Pitch.F] = "C̄is",
-            [Pitch.G] = "Ēs",
-            [Pitch.A] = "F" + Up,
-            [Pitch.B] = "Ḡ",
-            [Pitch.Cis] = "Ā",
-            [Pitch.Es] = "B̅es",
-            [Pitch.Fis] = "D" + Up,
-            [Pitch.Gis] = "Ē",
-            [Pitch.Bes] = "Fis" + Up,
+            [PitchEnum.C] = "Ḡis",
+            [PitchEnum.D] = "B̅es",
+            [PitchEnum.E] = "C̄",
+            [PitchEnum.F] = "C̄is",
+            [PitchEnum.G] = "Ēs",
+            [PitchEnum.A] = "F" + Up,
+            [PitchEnum.B] = "Ḡ",
+            [PitchEnum.Cis] = "Ā",
+            [PitchEnum.Es] = "B̅es",
+            [PitchEnum.Fis] = "D" + Up,
+            [PitchEnum.Gis] = "Ē",
+            [PitchEnum.Bes] = "Fis" + Up,
         };
 
         private static Dictionary<AcchordType, string> StringForAcchordType = new Dictionary<AcchordType, string>()
@@ -904,7 +913,6 @@ namespace CreateSheetsFromVideo
                     }
                 }
 
-
                 // Make tie follow duration (else Musescore error)
                 scoreString = builder.ToString();
                 IEnumerable<int> noteIndexes = scoreString.AllIndexesOf("<note").ToList();
@@ -946,13 +954,14 @@ namespace CreateSheetsFromVideo
 
                 // Write to file
                 scoreString = builder.ToString();
+                scoreString = BeautifyXml(scoreString);
                 File.WriteAllText(path, scoreString);
             }
 
             // Using FileStream
             //serializer.Serialize(new FileStream(path, FileMode.OpenOrCreate), scorePartwise);
 
-            Console.WriteLine("Saved Music Xml here as " + path);
+            Console.WriteLine("Saved Music Xml:" + path);
         }
 
         /// <summary>
@@ -961,6 +970,14 @@ namespace CreateSheetsFromVideo
         public void SaveAsFile(string path)
         {
             SaveScoreAsMusicXml(path, scorePartwise);
+        }
+
+        /// <summary>
+        ///   Inserts line breaks in the xml so it looks good.
+        /// </summary>
+        private static string BeautifyXml(string xml)
+        {
+            return XDocument.Parse(xml).ToString();
         }
     }
 }

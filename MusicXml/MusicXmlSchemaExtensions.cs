@@ -8,7 +8,15 @@ namespace MusicXmlSchema
 {
     public static class MusicXmlExtensions
     {
-        public static bool IsChord(this Note note)
+        public static bool IsChordBaseNote(this Note note)
+        {
+            return note.Chord == null;
+        }
+
+        /// <summary>
+        ///   True if this note belongs to another note to form a chord.
+        /// </summary>
+        public static bool IsChordSideNote(this Note note)
         {
             return note.Chord != null;
         }

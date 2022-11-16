@@ -727,7 +727,7 @@ namespace CreateSheetsFromVideo
 
                 // Assign ToneHeights to WHITE keys
                 // Find white key - C2
-                PianoKey KeyCis2 = blackKeys.Where(p => p.ToneHeight.Pitch == Pitch.Cis && p.ToneHeight.Octave == 2).First();
+                PianoKey KeyCis2 = blackKeys.Where(p => p.ToneHeight.Pitch == PitchEnum.Cis && p.ToneHeight.Octave == 2).First();
                 int xPositionC2 = (int)(KeyCis2.Point.X - 0.5 * keyDistance);
                 // Find nearest white key to C2
                 PianoKey nearestKeyToC2 = null;
@@ -739,7 +739,7 @@ namespace CreateSheetsFromVideo
                         nearestKeyToC2 = currentKey;
                     }
                 }
-                nearestKeyToC2.ToneHeight = new ToneHeight(Pitch.C, 2);
+                nearestKeyToC2.ToneHeight = new ToneHeight(PitchEnum.C, 2);
                 // Set ToneHeights of white keys
                 SetWhiteKeyToneHeights(whiteKeys, nearestKeyToC2);
 
@@ -766,7 +766,7 @@ namespace CreateSheetsFromVideo
         private void SetBlackKeyToneHeights(List<PianoKey> blackKeys, int index)
         {
             // Tone is C#
-            ToneHeight startToneHeight = new ToneHeight(Pitch.Cis, 2);
+            ToneHeight startToneHeight = new ToneHeight(PitchEnum.Cis, 2);
             blackKeys[index].ToneHeight = startToneHeight;
             int startIndex = index;
 
@@ -835,22 +835,22 @@ namespace CreateSheetsFromVideo
             Instance.textBoxLog.AppendText(DateTime.Now.ToString("hh:mm:ss") + ":  " + text.ToString());
         }
 
-        private readonly static Dictionary<Pitch, Color> ColorForPitchDict = new Dictionary<Pitch, Color>()
+        private readonly static Dictionary<PitchEnum, Color> ColorForPitchDict = new Dictionary<PitchEnum, Color>()
         {
             // White keys
-            { Pitch.C, Color.Black },
-            { Pitch.D, Color.Gold },
-            { Pitch.E, Color.Orange },
-            { Pitch.F, Color.Red },
-            { Pitch.G, Color.Violet },
-            { Pitch.A, Color.SkyBlue },
-            { Pitch.B, Color.Green },
+            { PitchEnum.C, Color.Black },
+            { PitchEnum.D, Color.Gold },
+            { PitchEnum.E, Color.Orange },
+            { PitchEnum.F, Color.Red },
+            { PitchEnum.G, Color.Violet },
+            { PitchEnum.A, Color.SkyBlue },
+            { PitchEnum.B, Color.Green },
             // Black keys
-            { Pitch.Cis, Color.White },
-            { Pitch.Es, Color.Yellow },
-            { Pitch.Fis, Color.Orange },
-            { Pitch.Gis, Color.Red },
-            { Pitch.Bes, Color.Violet },
+            { PitchEnum.Cis, Color.White },
+            { PitchEnum.Es, Color.Yellow },
+            { PitchEnum.Fis, Color.Orange },
+            { PitchEnum.Gis, Color.Red },
+            { PitchEnum.Bes, Color.Violet },
         };
     }
 

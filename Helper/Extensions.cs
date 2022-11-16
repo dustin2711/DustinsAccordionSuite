@@ -22,9 +22,35 @@ public static class Extensions
         return textCutOut;
     }
 
+    //public static double Clamp(this double value, double min, double max)
+    //{
+    //    return Math.Max(Math.Min(value, max), min);
+    //}
+
+    public static T Clamp<T>(this T value, T min, T max) where T : IComparable
+    {
+        if (value.CompareTo(min) == -1) // value < min
+        {
+            return min;
+        }
+        else if (value.CompareTo(max) == 1) // value > max
+        {
+            return max;
+        }
+        else return value;
+    }
+
     public static bool None<T>(this IEnumerable<T> items, Func<T, bool> predicate)
     {
         return !items.Any(predicate);
+    }
+
+    public static void RemoveRange<T>(this ICollection<T> items, IEnumerable<T> itemsToRemove)
+    {
+        foreach (T item in itemsToRemove)
+        {
+            items.Remove(item);
+        }
     }
 
     public static bool First<T>(this IEnumerable<T> items, Func<T, bool> predicate, out T item)
@@ -33,13 +59,28 @@ public static class Extensions
         return item != null;
     }
 
-    public static int Alter(this Pitch pitch)
+    /// <summary>
+    ///   Returns true if there are elements in list and all elements have same value.
+    /// </summary>
+    public static bool AllAreSame<T>(this IEnumerable<T> items)
     {
-        if (new Pitch[] { Pitch.Cis, Pitch.Fis, Pitch.Gis }.Contains(pitch))
+        if (items.Count() == 0)
+        {
+            return false;
+            //throw new Exception("Not defined");
+        }
+
+        T firstItem = items.First();
+        return items.All(item => item.Equals(firstItem));
+    }
+
+    public static int Alter(this PitchEnum pitch)
+    {
+        if (new PitchEnum[] { PitchEnum.Cis, PitchEnum.Fis, PitchEnum.Gis }.Contains(pitch))
         {
             return 1;
         }
-        else if (new Pitch[] { Pitch.Es, Pitch.Bes }.Contains(pitch))
+        else if (new PitchEnum[] { PitchEnum.Es, PitchEnum.Bes }.Contains(pitch))
         {
             return -1;
         }
@@ -177,6 +218,11 @@ public static class Extensions
     public static bool IsIn<T>(this T obj, IEnumerable<T> list)
     {
         return list.Contains(obj);
+    }
+
+    public static bool IsIn<T>(this T obj, params T[] items)
+    {
+        return items.Contains(obj);
     }
 
     public static bool FirstOrDefault<T>(this IEnumerable<T> list, Func<T, bool> func, out T element)

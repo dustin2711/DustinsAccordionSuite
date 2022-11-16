@@ -25232,10 +25232,37 @@ namespace MusicXmlSchema
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     public partial class Note
     {
+        private static Dictionary<string, string> RomanVoiceByVoice = new Dictionary<string, string>()
+        {
+            ["1"] = "I",
+            ["2"] = "II",
+            ["3"] = "III",
+            ["4"] = "IV",
+            ["5"] = "V",
+            ["6"] = "VI",
+            ["7"] = "VII",
+            ["8"] = "VIII",
+            ["9"] = "IX",
+            ["10"] = "X",
+        };
+
         public override string ToString()
         {
-            return $"V{Voice}: {PitchString}, {Type?.Value}{DottingString} ({Portion})";
+            try
+            {
+                string voice = (Voice != null && RomanVoiceByVoice.TryGetValue(Voice, out string it)) ? it : Voice;
+                return $"[{voice}] {PitchString}, {Type?.Value}{DottingString} ({Portion})";
+            }
+            catch (System.Exception e)
+            {
+                return "Fail";
+            }
         }
+
+        /// <summary>
+        ///   Gets an abstract value to compare two notes for which one is higher.
+        /// </summary>
+        public int TotalHeight => 100 * System.Convert.ToInt32(Pitch.Octave) + (int)Pitch.PitchEnum;
 
         /// <summary>
         ///   Is FootNote.Value == <see cref="CreateSheetsFromVideo.SheetsBuilder.BackupFootnote"/>
@@ -25302,6 +25329,9 @@ namespace MusicXmlSchema
             }
         }
 
+        /// <summary>
+        ///   Returns "•" or "••" if note is played longer.
+        /// </summary>
         public string DottingString
         {
             get
@@ -25794,18 +25824,22 @@ namespace MusicXmlSchema
     {
         private static readonly Dictionary<string, string> CorrectPitchDict = new Dictionary<string, string>()
         {
+            ["Ces"] = "B",
+            ["Des"] = "Cis",
             ["Dis"] = "Es",
             ["Ees"] = "Es",
-            ["Aes"] = "Gis",
-            ["Ges"] = "Fis",
             ["Eis"] = "F",
-            ["Bis"] = "C",
-            ["Des"] = "Cis",
-            ["Ces"] = "B",
             ["Fes"] = "E",
+            ["Ges"] = "Fis",
+            ["Aes"] = "Gis",
+            ["Ais"] = "Bes",
+            ["Bis"] = "C",
         };
 
-        public CreateSheetsFromVideo.Pitch ThisAppsPitch
+        /// <summary>
+        ///   "Extension" property to get pitch of this app
+        /// </summary>
+        public CreateSheetsFromVideo.PitchEnum PitchEnum
         {
             get
             {
@@ -25849,7 +25883,7 @@ namespace MusicXmlSchema
                     pitchString = correctedValue;
                 }
 
-                CreateSheetsFromVideo.Pitch pitch = Helper.ParseEnum<CreateSheetsFromVideo.Pitch>(pitchString);
+                CreateSheetsFromVideo.PitchEnum pitch = Helper.ParseEnum<CreateSheetsFromVideo.PitchEnum>(pitchString);
                 return pitch;
             }
         }

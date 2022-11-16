@@ -21,7 +21,7 @@ namespace CreateSheetsFromVideo
         }
 
         public int Octave => ToneHeight.Octave;
-        public Pitch Pitch => ToneHeight.Pitch;
+        public PitchEnum Pitch => ToneHeight.Pitch;
 
         public override string ToString()
         {

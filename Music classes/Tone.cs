@@ -29,7 +29,7 @@ namespace CreateSheetsFromVideo
         [XmlIgnore]
         public Color Color;
 
-        public Pitch Pitch => ToneHeight.Pitch;
+        public PitchEnum Pitch => ToneHeight.Pitch;
 
         public int Octave => ToneHeight.Octave;
 

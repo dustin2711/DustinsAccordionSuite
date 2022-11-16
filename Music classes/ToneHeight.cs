@@ -14,39 +14,39 @@ namespace CreateSheetsFromVideo
         /// Static 
         //////////////
 
-        public static ToneHeight C6 => new ToneHeight(Pitch.C, 6);
-        public static ToneHeight D6 => new ToneHeight(Pitch.D, 6);
-        public static ToneHeight E6 => new ToneHeight(Pitch.E, 6);
-        public static ToneHeight F6 => new ToneHeight(Pitch.F, 6);
-        public static ToneHeight G6 => new ToneHeight(Pitch.G, 6);
-        public static ToneHeight A6 => new ToneHeight(Pitch.A, 6);
-        public static ToneHeight B6 => new ToneHeight(Pitch.B, 6);
+        public static ToneHeight C6 => new ToneHeight(PitchEnum.C, 6);
+        public static ToneHeight D6 => new ToneHeight(PitchEnum.D, 6);
+        public static ToneHeight E6 => new ToneHeight(PitchEnum.E, 6);
+        public static ToneHeight F6 => new ToneHeight(PitchEnum.F, 6);
+        public static ToneHeight G6 => new ToneHeight(PitchEnum.G, 6);
+        public static ToneHeight A6 => new ToneHeight(PitchEnum.A, 6);
+        public static ToneHeight B6 => new ToneHeight(PitchEnum.B, 6);
 
-        private static readonly Pitch[] WhitePitches = new Pitch[]
+        private static readonly PitchEnum[] WhitePitches = new PitchEnum[]
         {
-            Pitch.C,
-            Pitch.D,
-            Pitch.E,
-            Pitch.F,
-            Pitch.G,
-            Pitch.A,
-            Pitch.B
+            PitchEnum.C,
+            PitchEnum.D,
+            PitchEnum.E,
+            PitchEnum.F,
+            PitchEnum.G,
+            PitchEnum.A,
+            PitchEnum.B
         };
 
-        private static readonly Pitch[] BlackPitches = new Pitch[]
+        private static readonly PitchEnum[] BlackPitches = new PitchEnum[]
         {
-            Pitch.Cis,
-            Pitch.Es,
-            Pitch.Fis,
-            Pitch.Gis,
-            Pitch.Bes,
+            PitchEnum.Cis,
+            PitchEnum.Es,
+            PitchEnum.Fis,
+            PitchEnum.Gis,
+            PitchEnum.Bes,
         };
 
         /// Instance
         //////////////
         
         // Fields
-        public Pitch Pitch;
+        public PitchEnum Pitch;
         public int Octave;
 
         /// <summary>
@@ -58,7 +58,7 @@ namespace CreateSheetsFromVideo
             set
             {
                 Octave = value / 12;
-                Pitch = (Pitch)(value % 12);
+                Pitch = (PitchEnum)(value % 12);
             }
         }
 
@@ -66,7 +66,7 @@ namespace CreateSheetsFromVideo
         {
         }
 
-        public ToneHeight(Pitch pitch, int octave)
+        public ToneHeight(PitchEnum pitch, int octave)
         {
             Pitch = pitch;
             Octave = octave;
@@ -95,7 +95,7 @@ namespace CreateSheetsFromVideo
             return 7 * Octave + pitchStake;
         }
 
-        private static WhitePitch GetWhitePitch(Pitch pitch)
+        private static WhitePitch GetWhitePitch(PitchEnum pitch)
         {
             // Parse first letter to WhitePitch
             if (Enum.TryParse(pitch.ToString().Substring(0, 1), out WhitePitch whitePitch))
@@ -134,14 +134,14 @@ namespace CreateSheetsFromVideo
         {
             switch (toneHeight.Pitch)
             {
-                case Pitch.A:
-                case Pitch.B:
-                case Pitch.D:
-                case Pitch.E:
-                case Pitch.G:
+                case PitchEnum.A:
+                case PitchEnum.B:
+                case PitchEnum.D:
+                case PitchEnum.E:
+                case PitchEnum.G:
                     return toneHeight - 2;
-                case Pitch.C:
-                case Pitch.F:
+                case PitchEnum.C:
+                case PitchEnum.F:
                     return toneHeight - 1;
                 default:
                     throw new Exception("No black key");
@@ -152,12 +152,12 @@ namespace CreateSheetsFromVideo
         {
             switch (toneHeight.Pitch)
             {
-                case Pitch.Bes:
-                case Pitch.Es:
-                case Pitch.Gis:
+                case PitchEnum.Bes:
+                case PitchEnum.Es:
+                case PitchEnum.Gis:
                     return toneHeight + 2;
-                case Pitch.Cis:
-                case Pitch.Fis:
+                case PitchEnum.Cis:
+                case PitchEnum.Fis:
                     return toneHeight - 3;
                 default:
                     throw new Exception("No black key");
@@ -168,14 +168,14 @@ namespace CreateSheetsFromVideo
         {
             switch (toneHeight.Pitch)
             {
-                case Pitch.A:
-                case Pitch.C:
-                case Pitch.D:
-                case Pitch.F:
-                case Pitch.G:
+                case PitchEnum.A:
+                case PitchEnum.C:
+                case PitchEnum.D:
+                case PitchEnum.F:
+                case PitchEnum.G:
                     return toneHeight + 2;
-                case Pitch.B:
-                case Pitch.E:
+                case PitchEnum.B:
+                case PitchEnum.E:
                     return toneHeight + 1;
                 default:
                     throw new Exception("No black key");
@@ -186,12 +186,12 @@ namespace CreateSheetsFromVideo
         {
             switch (toneHeight.Pitch)
             {
-                case Pitch.Cis:
-                case Pitch.Fis:
-                case Pitch.Gis:
+                case PitchEnum.Cis:
+                case PitchEnum.Fis:
+                case PitchEnum.Gis:
                     return toneHeight + 2;
-                case Pitch.Es:
-                case Pitch.Bes:
+                case PitchEnum.Es:
+                case PitchEnum.Bes:
                     return toneHeight + 3;
                 default:
                     throw new Exception("No black key");

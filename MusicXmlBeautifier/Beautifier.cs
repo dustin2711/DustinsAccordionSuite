@@ -5,13 +5,67 @@ using System.Text;
 using System.Xml.Serialization;
 using XmlNote = MusicXmlSchema.Note;
 using CreateSheetsFromVideo;
-using Pitch = CreateSheetsFromVideo.Pitch;
+using PitchEnum = CreateSheetsFromVideo.PitchEnum;
 
 namespace MusicXmlBeautifier
 {
+    /// <summary>
+    ///   Omits bass lyrics if they previously appeared.
+    /// </summary>
+    [Flags]
+    enum LyricsSimplification
+    {
+        /// <summary>
+        ///   Always write bass lyrics.
+        /// </summary>
+        None = 0,
+        /// <summary>
+        ///   Omit bass lyrics if a tone is repeated in a measure.
+        /// </summary>
+        SameTone = 1,
+        /// <summary>
+        ///   Omit bass lyrics if a tone is repeated über measures hinweg.
+        /// </summary>
+        SameMeasure = 2,
+        /// <summary>
+        ///   Omit bass lyrics if it is repeated in a measure or über measures hinweg.
+        /// </summary>
+        All = SameTone | SameMeasure
+    }
+
+    class LyricsReplacement
+    {
+        public string NewLyric;
+        public string[] LyricsChainToReplace;
+
+        public LyricsReplacement(string newLyric, params string[] lyricsChainToReplace)
+        {
+            this.NewLyric = newLyric;
+            this.LyricsChainToReplace = lyricsChainToReplace;
+        }
+    }
+
     internal class Beautifier
     {
-        internal static void AddBassLyrics(string musicXmlPath, bool removeStaccato = true)
+        /// <summary>
+        ///   Create a music xml for accordion at the same location as the given music xml with the given file name addition.
+        /// </summary>
+        /// <param name="musicXmlPath"></param>
+        /// <param name="fileNameAddition">This string is appended to the name of the newly created .musicxml file.</param>
+        /// <param name="removeNotesOutOfRange">Removes the notes that cannot be played by my red accordion.</param>
+        /// <param name="removeStaccato"></param>
+        /// <exception cref="Exception"></exception>
+        internal static void CreateMusicXmlForAccordion(
+            string musicXmlPath,
+            string fileNameAddition = "(Accordion)",
+            bool clampBassNotesToAccordionRange = true,
+            bool removeNotesOutOfRange = true,
+            bool removeStaccato = true,
+            List<int>? voicesToExclude = default,
+            bool reduceMainHandChordsToOneTone = false,
+            bool removeLineBreaks = true,
+            LyricsSimplification lyricSimplification = LyricsSimplification.All,
+            params LyricsReplacement[] lyricsReplacements)
         {
             StringBuilder builder = new(File.ReadAllText(musicXmlPath));
             string scoreString = builder.ToString();
@@ -39,137 +93,334 @@ namespace MusicXmlBeautifier
             using StringReader reader = new(builder.ToString());
             // Create score from string
             XmlSerializer serializer = new(typeof(ScorePartwise));
-            ScorePartwise scorePartwise = serializer.Deserialize(reader) as ScorePartwise;
-
-            if (string.IsNullOrWhiteSpace(scorePartwise.MovementTitle))
+            if (serializer.Deserialize(reader) is ScorePartwise scorePartwise)
             {
-                scorePartwise.MovementTitle = Path.GetFileNameWithoutExtension(musicXmlPath);
-            }
-
-            int circleOfFifthsPosition = Convert.ToInt32(scorePartwise.Part[0].Measure[0].Attributes[0].Key[0].Fifths);
-
-            // Go through parts
-            int measureNumberXml = 0;
-            for (int partNumber = 0; partNumber < Math.Min(2, scorePartwise.Part.Count); partNumber++)
-            {
-                // Go through measures (Takte)
-                foreach (ScorePartwisePartMeasure measure in scorePartwise.Part[partNumber].Measure)
+                // Set accordion as instrument
+                foreach (ScorePart part in scorePartwise.PartList.ScorePart)
                 {
-                    // Setup measure
-                    // NewPages are invalid due to added lyrics: Remove them
-                    if (measure.Print.Count > 0)
-                    {
-                        measure.Print[0].NewPage = YesNo.No;
-                    }
-                    if (measure.Attributes.Count > 0 && measure.Attributes[0].Key.Count > 0)
-                    {
-                        // Write # and b over each note instead of using key
-                        measure.Attributes[0].Key[0].Fifths = "0";
-                    }
+                    part.PartName.Value = "Accordion";
 
-                    measureNumberXml++;
+                    ScoreInstrument scoreInstrument = part.ScoreInstrument.First();
+                    scoreInstrument.InstrumentName = "Accordion";
+                    //scoreInstrument.Id = "P2-I1"; // Invalid
 
-                    // Remove staccatos of current measure
-                    if (removeStaccato)
+                    MidiInstrument midiInstrument = part.MidiInstrument.First();
+                    midiInstrument.MidiProgram = "22"; // MidiProgram 22 = Accordion
+                    //midi.Volume = 80;
+                    //midiInstrument.Id = "P2-I1";
+                    //midiInstrument.MidiChannel = "2";
+                    //midiInstrument.Pan = 0;
+                }
+
+                if (string.IsNullOrWhiteSpace(scorePartwise.MovementTitle))
+                {
+                    scorePartwise.MovementTitle = Path.GetFileNameWithoutExtension(musicXmlPath);
+                }
+
+                int circleOfFifthsPosition = Convert.ToInt32(scorePartwise.Part[0].Measure[0].Attributes[0].Key[0].Fifths);
+
+                // Go through parts
+
+                // Number of the measure that is also visible in Musescore (1 = first measure)
+                int measureIndex = 0;
+
+                for (int partNumber = 0; partNumber < Math.Min(2, scorePartwise.Part.Count); partNumber++)
+                {
+                    List<ScorePartwisePartMeasure> measures = scorePartwise.Part[partNumber].Measure.ToList();
+
+                    // Go through measures (Takte)
+                    foreach (ScorePartwisePartMeasure measure in measures)
                     {
-                        foreach (XmlNote note in measure.Note)
+                        // Remove line breaks
+                        if (removeLineBreaks)
                         {
-                            Articulations articulations = note.Notations.FirstOrDefault()?.Articulations.FirstOrDefault();
-                            if (articulations != null)
+                            foreach (Print print in measure.Print)
                             {
-                                articulations.Staccato.Clear();
+                                print.NewPage = YesNo.No;
+                                print.NewSystem = YesNo.No;
                             }
                         }
-                    }
 
-                    /// Insert bass lyrics for staff "2"
-                    // Get notes of current beat
-                    List<XmlNote> notes = measure.Note.Where(note => note.Rest == null).ToList();
-                    if (partNumber != 1)
-                    {
-                        notes = notes.Where(note => note.Staff == "2").ToList();
-                    }
-
-                    if (notes.Count > 0)
-                    {
-                        // Clear on new measure
-                        List<List<Pitch>> previousPitchesList = new();
-
-                        // Iterate notes
-                        for (int i = 0; i < notes.Count; i++)
+                        // Setup measure
+                        // NewPages are invalid due to added lyrics: Remove them
+                        if (measure.Print.Count > 0)
                         {
-                            XmlNote mainNote = notes[i];
+                            measure.Print[0].NewPage = YesNo.No;
+                        }
+                        if (measure.Attributes.Count > 0 && measure.Attributes[0].Key.Count > 0)
+                        {
+                            // Write # and b over each note instead of using key
+                            measure.Attributes[0].Key[0].Fifths = "0";
+                        }
 
-                            //if (mainNote.Rest != null)
-                            //{
-                            //    previousPitches = null;
-                            //    continue;
-                            //}
+                        measureIndex++;
 
-                            if (mainNote.IsChord() || mainNote.IsBackup)
-                                continue;
-
-                            List<Pitch> pitches = new();
-                            pitches.Add(mainNote.Pitch.ThisAppsPitch);
-
-                            for (int j = i + 1; j <= notes.Count; j++)
+                        // Remove staccatos of current measure
+                        if (removeStaccato)
+                        {
+                            foreach (XmlNote note in measure.Note)
                             {
-                                if (j < notes.Count && notes[j].IsChord())
+                                if (note.Notations.FirstOrDefault()?.Articulations.FirstOrDefault() is Articulations articulations)
                                 {
-                                    if (mainNote.Duration != notes[j].Duration
-                                        || mainNote.Type.Value != notes[j].Type.Value)
-                                    {
-                                        // Chord notes must have same duration!
-                                        Debugger.Break();
-                                    }
-
-                                    // Collect pitch
-                                    pitches.Add(notes[j].Pitch.ThisAppsPitch);
+                                    articulations.Staccato.Clear();
                                 }
-                                else
+                            }
+                        }
+
+                        // Get actual notes (no rests)
+                        List<XmlNote> notes = measure.Note.Where(note => note.Rest == null).ToList(); // Ignore rests
+
+                        if (voicesToExclude != null)
+                        {
+                            notes = notes.Where(note => !voicesToExclude.Contains(Convert.ToInt32(note.Voice))).ToList();
+                        }
+
+                        if (removeNotesOutOfRange)
+                        {
+                            List<XmlNote> rightNotes = partNumber == 2 ? notes : notes.Where(note => note.Staff == "1").ToList();
+
+                            foreach (XmlNote note in rightNotes)
+                            {
+                                int octave = int.Parse(note.Pitch.Octave);
+                                PitchEnum pitch = note.Pitch.PitchEnum;
+                                if (octave == 6 && pitch == PitchEnum.Fis)
+                                { }
+                                if (octave <= 2
+                                    || (octave == 3 && pitch < PitchEnum.F)
+                                    || octave >= 7
+                                    || (octave == 6 && pitch > PitchEnum.F))
                                 {
-                                    if (measureNumberXml == 4)
-                                    { }
+                                    measure.Note.Remove(note);
+                                }
+                                //octave = octave.Clamp(3, 3); // Octave 4 ist die Akkordeon-Standard-Tonleiter (C bis C')
+                                //note.Pitch.Octave = octave.ToString();
+                            }
+                        }
 
+                        // Insert bass lyrics for staff "2" (bass)
 
-                                    // Remove redundant tones
-                                    pitches = pitches.Distinct().ToList();
+                        // Get notes of current beat
+                        List<XmlNote> leftHandNotes = partNumber == 1 ? notes : notes.Where(note => note.Staff == "2").ToList();
+                        List<XmlNote> rightHandNotes = notes.Except(leftHandNotes).Where(it => !it.IsBackup).ToList();
 
-                                    // Set MainNote's lyrics
-                                    string lyrics = SheetsBuilder.CreateBassLyrics(pitches, previousPitchesList, circleOfFifthsPosition, out bool _);
+                        // Reduce main hand chords to one tone?
+                        if (reduceMainHandChordsToOneTone)
+                        {
+                            // Split right hand chords into main and sub notes
+                            List<XmlNote> baseNotes = rightHandNotes.Where(it => !it.IsChordSideNote()).ToList();
+                            List<XmlNote> sideNotes = rightHandNotes.Except(baseNotes).ToList();
 
-                                    // Pitches must not be equal to print lyrics
-                                    if (previousPitchesList.Count == 0
-                                        || !Helper.ListsEqual(previousPitchesList.LastOrDefault(), pitches))
+                            if (measureIndex == 24)
+                            { }
+
+                            // If base and subnotes have the same durations, the higher one can be picked
+                            if (baseNotes.Select(it => it.Duration).SequenceEqual(sideNotes.Select(it => it.Duration)))
+                            {
+                                List<XmlNote> higherNotes = new();
+                                for (int i = 0; i < baseNotes.Count; i++)
+                                {
+                                    XmlNote baseNote = baseNotes[i];
+                                    XmlNote subNote = sideNotes[i];
+                                    higherNotes.Add(baseNote.TotalHeight > subNote.TotalHeight ? baseNote : subNote);
+                                    string bla = baseNote.TotalHeight + " vs " + subNote.TotalHeight;
+
+                                }
+                                List<XmlNote> lowerNotes = rightHandNotes.Except(higherNotes).ToList();
+
+                                // Remove one list of notes..
+                                measure.Note.RemoveRange(sideNotes);
+
+                                // ..and assign the higher notes to the other list
+                                for (int i = 0; i < baseNotes.Count; i++)
+                                {
+                                    XmlNote baseNote = baseNotes[i];
+                                    XmlNote higherNote = higherNotes[i];
+                                    baseNote.Pitch = higherNote.Pitch;
+                                }
+                            }
+
+                        }
+
+                        if (clampBassNotesToAccordionRange)
+                        {
+                            ClampBassNotesToAccordionRange(leftHandNotes);
+                        }
+
+                        if (leftHandNotes.Count > 0)
+                        {
+                            // Clear on new measure
+                            List<List<PitchEnum>> previousPitchesList = new();
+
+                            // Iterate notes
+                            for (int noteIndex = 0; noteIndex < leftHandNotes.Count; noteIndex++)
+                            {
+                                XmlNote note = leftHandNotes[noteIndex];
+
+                                if (!note.IsChordSideNote() && !note.IsBackup)
+                                {
+                                    List<PitchEnum> pitches = new();
+                                    pitches.Add(note.Pitch.PitchEnum);
+
+                                    // Iterate the other notes and maybe extent pitches
+                                    for (int otherNoteIndex = noteIndex + 1; otherNoteIndex <= leftHandNotes.Count; otherNoteIndex++)
                                     {
-                                        previousPitchesList.Add(pitches);
-                                        mainNote.Lyric.Add(new Lyric()
+                                        if (leftHandNotes.ElementAtOrDefault(otherNoteIndex) is XmlNote otherNote && otherNote.IsChordSideNote())
                                         {
-                                            Text = new TextElementData()
+                                            if (note.Duration != otherNote.Duration
+                                                || note.Type.Value != otherNote.Type.Value)
                                             {
-                                                Value = lyrics,
-                                                FontSize = "9",
-                                                //Overline = overline ? "1" : "0", // Does not work (also not with FontStyleSpecified true)
+                                                // Chord notes must have same duration!
+                                                Debugger.Break();
                                             }
-                                        });
-                                    }
 
-                                    // Set next MainNote...
-                                    break;
+                                            // Add pitch of otherNote
+                                            pitches.Add(otherNote.Pitch.PitchEnum);
+                                        }
+                                        else
+                                        {
+                                            // >> Breakpoint "parking-spot" for certain measures <<
+
+                                            // Remove redundant tones
+                                            pitches = pitches.Distinct().ToList();
+
+                                            // Set MainNote's lyrics
+                                            string bassLyrics = SheetsBuilder.CreateBassLyrics(pitches, previousPitchesList, circleOfFifthsPosition, out bool _);
+
+                                            // Pitches must not be equal to print lyrics
+                                            if (previousPitchesList.Count == 0
+                                                || previousPitchesList.LastOrDefault()?.SequenceEqual(pitches) == false)
+                                            {
+                                                previousPitchesList.Add(pitches);
+
+                                                // Add bass lyrics
+                                                note.Lyric.Add(new Lyric()
+                                                {
+                                                    Text = new TextElementData()
+                                                    {
+                                                        Value = bassLyrics,
+                                                        FontSize = "9",
+                                                        //Overline = overline ? "1" : "0", // Does not work (also not with FontStyleSpecified true)
+                                                    }
+                                                });
+                                            }
+
+                                            // Set next MainNote...
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         }
+                    } // foreach measure
+
+                    SimplificateLyrics(measures, lyricSimplification, lyricsReplacements);
+                }
+
+                using StringWriter textWriter = new();
+                string savePath = Path.ChangeExtension(musicXmlPath, null) + fileNameAddition + Path.GetExtension(musicXmlPath);
+
+                SheetsBuilder.SaveScoreAsMusicXml(savePath, scorePartwise);
+
+                // Open created file with musescore
+                Helper.OpenWithDefaultProgram(savePath);
+
+                //Debugger.Break();
+            }
+            else
+            {
+                throw new Exception("ScorePartWise could not be deserialized: " + musicXmlPath);
+            }
+        }
+
+        /// <summary>
+        ///   Omit lyrics if they e.g. already appear in the measure before.
+        /// </summary>
+        private static void SimplificateLyrics(List<ScorePartwisePartMeasure> measures, LyricsSimplification lyricsSimplification, LyricsReplacement[] lyricsReplacements)
+        {
+            // Local methods
+            static List<Lyric> GetLyrics(ScorePartwisePartMeasure measure) 
+                => measure.Note.SelectMany(note => note.Lyric).ToList();
+            static List<string> GetTexts(List<Lyric> lyrics) 
+                => lyrics.Select(lyr => lyr.Text.Value).ToList();
+
+            // Handle LyricsReplacements
+
+            foreach (ScorePartwisePartMeasure measure in measures)
+            {
+                List<Lyric>? lyrics = GetLyrics(measure);
+                List<string> texts = GetTexts(lyrics);
+                foreach (LyricsReplacement replacement in lyricsReplacements)
+                {
+                    if (texts.SequenceEqual(replacement.LyricsChainToReplace))
+                    {
+                        lyrics.ForEach(lyric => lyric.Text.Value = "");
+                        lyrics[0].Text.Value = replacement.NewLyric;
                     }
                 }
             }
 
-            using StringWriter textWriter = new();
-            string savePath = Path.ChangeExtension(musicXmlPath, null) + "(withBass)" + Path.GetExtension(musicXmlPath);
+            // Handle LyricsSimplication
 
-            SheetsBuilder.SaveScoreAsMusicXml(savePath, scorePartwise);
-            Helper.OpenWithDefaultProgram(savePath);
+            List<string> lastlyPrintedTexts = GetTexts(GetLyrics(measures[0]));
 
-            //Debugger.Break();
+            // Go through all measures starting with the second
+            foreach (ScorePartwisePartMeasure measure in measures.Skip(1))
+            {
+                List<Lyric>? lyrics = GetLyrics(measure);
+                List<string> texts = GetTexts(lyrics);
+
+                if (lyrics.Count > 0)
+                {
+                    // If previous measure has only one same lyric, the same lyrics of the current measure can be deleted until there is another lyric
+                    if (lastlyPrintedTexts.AllAreSame() && texts.First() == lastlyPrintedTexts.First())
+                    {
+                        if (lyricsSimplification.HasFlag(LyricsSimplification.SameTone))
+                        {
+                            string lastlyPrintedText = lastlyPrintedTexts.First();
+                            foreach (Lyric lyric in lyrics)
+                            {
+                                if (lyric.Text.Value == lastlyPrintedText)
+                                {
+                                    lyric.Text.Value = "";
+                                }
+                                else break;
+                            }
+                        }
+                    }
+                    // If lyrics sequence of current to previous measure is same, delete the lyrics
+                    else if (texts.SequenceEqual(lastlyPrintedTexts))
+                    {
+                        if (lyricsSimplification.HasFlag(LyricsSimplification.SameMeasure))
+                        {
+                            lyrics.ForEach(lyric => lyric.Text.Value = "");
+                        }
+                    }
+
+                    lastlyPrintedTexts = texts;
+                }
+            }
+        }
+
+        /// <summary>
+        ///   Moves all pitch heights of the given notes to the one that can be played on accordion.
+        /// </summary>
+        private static void ClampBassNotesToAccordionRange(List<XmlNote> notes)
+        {
+            // Clamp notes into accordion bass
+            foreach (XmlNote note in notes)
+            {
+                if (!note.IsBackup)
+                {
+                    note.Pitch.Octave = "3";
+                    if ((note.Pitch.Step is Step.C or Step.D && note.Pitch.Alter is 0 or 1)
+                        || (note.Pitch.Step is Step.D or Step.E && note.Pitch.Alter is -1 or -2)
+                        || (note.Pitch.Step is Step.E or Step.F && note.Pitch.Alter is -2 or -3 or -4)
+                        || (note.Pitch.Step is Step.B or Step.C && note.Pitch.Alter is 1 or 2 or 3))
+                    {
+                        note.Pitch.Octave = "4";
+                    }
+                }
+            }
         }
     }
 }

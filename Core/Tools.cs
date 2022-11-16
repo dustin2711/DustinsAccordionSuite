@@ -23,7 +23,7 @@ namespace CreateSheetsFromVideo
     public static class Tools
     {
         /// <summary>
-        ///   Searches fot the next "duration" element and returns its value
+        ///   Searches fot the next "duration" element after the root element and returns its value
         /// </summary>
         public static int FilterDuration(string text, int startIndex, string rootElementName)
         {

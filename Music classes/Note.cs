@@ -103,7 +103,7 @@ namespace CreateSheetsFromVideo
 
         public double Duration => EndTime - StartTime;
 
-        public Pitch Pitch => ToneHeight.Pitch;
+        public PitchEnum Pitch => ToneHeight.Pitch;
 
         public int Octave => ToneHeight.Octave;
 

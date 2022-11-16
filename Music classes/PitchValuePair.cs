@@ -11,10 +11,10 @@ namespace CreateSheetsFromVideo
     /// </summary>
     public class PitchIntegerPair
     {
-        public Pitch Pitch { get; }
+        public PitchEnum Pitch { get; }
         public int Integer { get; }
 
-        public PitchIntegerPair(Pitch pitch)
+        public PitchIntegerPair(PitchEnum pitch)
         {
             Pitch = pitch;
             Integer = (int)pitch;
