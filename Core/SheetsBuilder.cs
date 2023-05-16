@@ -604,6 +604,11 @@ namespace CreateSheetsFromVideo
                             {
                                 lyrics = CreateCustomBassLyrics(pairs[1].Pitch, pairs[2].Pitch, pairs[0].Pitch, 1, 2);
                             }
+                            else if (delta1 == 1 && delta2 == 4)
+                            {
+                                lyrics = CreateCustomBassLyrics(pairs[1].Pitch, pairs[2].Pitch, pairs[0].Pitch, 0, 2);
+                                //Debugger.Break(); // CHECK!
+                            }
                             else
                             {
                                 Debugger.Break();

@@ -21094,6 +21094,16 @@ namespace MusicXmlSchema
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     public partial class Lyric
     {
+        public string Value
+        {
+            get => Text.Value;
+            set => Text.Value = value;
+        }
+
+        public override string ToString()
+        {
+            return Value;
+        }
 
         [System.Xml.Serialization.XmlElementAttribute("syllabic", Namespace = "")]
         public Syllabic Syllabic { get; set; }

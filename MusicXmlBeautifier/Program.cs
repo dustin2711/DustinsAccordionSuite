@@ -2,13 +2,13 @@
 
 using MusicXmlBeautifier;
 
-string file = @"G:\My Drive\MusicXmls\BigInJapan.musicxml";
+string file = @"C:\Users\Dustin\Downloads\Mononoke.musicxml";
 
 Console.WriteLine("***MusicXmlBeautifier***\n\n" +
-    "This programm will add bass lyrics to the given musicxml file: " + file);
+    "This programm will accordion add bass lyrics to the given musicxml file: " + file);
 
 Beautifier.CreateMusicXmlForAccordion(file,
-    clampBassNotesToAccordionRange: false,
+    clampBassNotesToAccordionRange: true,
     removeNotesOutOfRange: true,
     removeStaccato: true,
     voicesToExclude: new List<int>() { },
@@ -17,13 +17,14 @@ Beautifier.CreateMusicXmlForAccordion(file,
     lyricSimplification: LyricsSimplification.All,
     lyricsReplacements: new LyricsReplacement[]
     {
-        //new LyricsReplacement("Fdur", "F", "A", "F", "A"),
-        //new LyricsReplacement("Bdur", "B", "F", "B", "F"),
-        //new LyricsReplacement("Bdur", "B", "BF", "B", "BF"),
-        //new LyricsReplacement("Bdur", "B", "FB", "B", "FB"),
-        //new LyricsReplacement("Cdur", "C", "GC", "C", "GC"),
-        //new LyricsReplacement("Dmol", "D", "AD", "D", "AD", "D"),
-        //new LyricsReplacement("Dmol", "D", "AD", "D", "AD"),
+        new("CDur", new string[] { "C", "E", "G" }, true),
+        new("Ddur", new string[] { "D", "F#", "A" }, true),
+        new("Ddur", new string[] { "D", "F#", "G", "A" }, true),
+        new("Emol", new string[] { "E", "G", "H" }, true),
+        new("Gdur", new string[] { "G", "H", "D" }, true),
+        new("Amol", new string[] { "A", "C", "E" }, true),
+        new("ACD", new string[] { "A", "C", "D" }, true),
+        new("HCD", new string[] { "H", "C", "D" }, true),
     });
 Console.Read();
 

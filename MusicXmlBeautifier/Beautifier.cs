@@ -33,18 +33,6 @@ namespace MusicXmlBeautifier
         All = SameTone | SameMeasure
     }
 
-    class LyricsReplacement
-    {
-        public string NewLyric;
-        public string[] LyricsChainToReplace;
-
-        public LyricsReplacement(string newLyric, params string[] lyricsChainToReplace)
-        {
-            this.NewLyric = newLyric;
-            this.LyricsChainToReplace = lyricsChainToReplace;
-        }
-    }
-
     internal class Beautifier
     {
         /// <summary>
@@ -338,36 +326,70 @@ namespace MusicXmlBeautifier
         private static void SimplificateLyrics(List<ScorePartwisePartMeasure> measures, LyricsSimplification lyricsSimplification, LyricsReplacement[] lyricsReplacements)
         {
             // Local methods
-            static List<Lyric> GetLyrics(ScorePartwisePartMeasure measure) 
+            static List<Lyric> GetLyrics(ScorePartwisePartMeasure measure)
                 => measure.Note.SelectMany(note => note.Lyric).ToList();
-            static List<string> GetTexts(List<Lyric> lyrics) 
-                => lyrics.Select(lyr => lyr.Text.Value).ToList();
+            static List<string> ToStrings(List<Lyric> lyrics) 
+                => lyrics.Select(lyr => lyr.Value).ToList();
+
 
             // Handle LyricsReplacements
 
+            // Go through measures
             foreach (ScorePartwisePartMeasure measure in measures)
             {
-                List<Lyric>? lyrics = GetLyrics(measure);
-                List<string> texts = GetTexts(lyrics);
-                foreach (LyricsReplacement replacement in lyricsReplacements)
+                List<Lyric> lyrics = GetLyrics(measure);
+                if (lyrics.Count > 0)
                 {
-                    if (texts.SequenceEqual(replacement.LyricsChainToReplace))
+                    List<string> texts = ToStrings(lyrics);
+                    foreach (LyricsReplacement replacement in lyricsReplacements)
                     {
-                        lyrics.ForEach(lyric => lyric.Text.Value = "");
-                        lyrics[0].Text.Value = replacement.NewLyric;
+                        if (replacement.CanReplaceMultipleTimesPerMeasure)
+                        {
+                            for (int index = 0; index < texts.Count; index++)
+                            {
+                                List<Lyric> currentlyrics = new();
+                                for (int innerIndex = index; innerIndex < index + replacement.LyricsChainToReplace.Length; innerIndex++)
+                                {
+                                    if (innerIndex >= texts.Count)
+                                    {
+                                        break;
+                                    }
+                                    currentlyrics.Add(lyrics[innerIndex]);
+                                }
+                                if (ToStrings(currentlyrics).SequenceEqual(replacement.LyricsChainToReplace))
+                                {
+                                    // Set all lyrics empty..
+                                    foreach (Lyric lyric in currentlyrics)
+                                    {
+                                        lyric.Value = "";
+                                    }
+                                    // .. except the first one that is replaced
+                                    lyrics[index].Value = replacement.NewLyric;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (texts.SequenceEqual(replacement.LyricsChainToReplace))
+                            {
+                                lyrics.ForEach(lyric => lyric.Value = "");
+                                lyrics[0].Value = replacement.NewLyric;
+                            }
+                        }
                     }
                 }
             }
 
-            // Handle LyricsSimplication
 
-            List<string> lastlyPrintedTexts = GetTexts(GetLyrics(measures[0]));
+            // Handle LyricsSimplication (boil down)
+
+            List<string> lastlyPrintedTexts = ToStrings(GetLyrics(measures[0]));
 
             // Go through all measures starting with the second
             foreach (ScorePartwisePartMeasure measure in measures.Skip(1))
             {
-                List<Lyric>? lyrics = GetLyrics(measure);
-                List<string> texts = GetTexts(lyrics);
+                List<Lyric> lyrics = GetLyrics(measure);
+                List<string> texts = ToStrings(lyrics);
 
                 if (lyrics.Count > 0)
                 {
@@ -379,9 +401,9 @@ namespace MusicXmlBeautifier
                             string lastlyPrintedText = lastlyPrintedTexts.First();
                             foreach (Lyric lyric in lyrics)
                             {
-                                if (lyric.Text.Value == lastlyPrintedText)
+                                if (lyric.Value == lastlyPrintedText)
                                 {
-                                    lyric.Text.Value = "";
+                                    lyric.Value = "";
                                 }
                                 else break;
                             }
@@ -392,11 +414,25 @@ namespace MusicXmlBeautifier
                     {
                         if (lyricsSimplification.HasFlag(LyricsSimplification.SameMeasure))
                         {
-                            lyrics.ForEach(lyric => lyric.Text.Value = "");
+                            lyrics.ForEach(lyric => lyric.Value = "");
                         }
                     }
 
                     lastlyPrintedTexts = texts;
+                }
+            }
+
+
+            // Remove pedals
+
+            foreach (ScorePartwisePartMeasure measure in measures)
+            {
+                foreach (Direction direction in measure.Direction)
+                {
+                    foreach (var type in direction.DirectionType)
+                    {
+                        type.Pedal = null;
+                    }
                 }
             }
         }
