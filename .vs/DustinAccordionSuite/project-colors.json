@@ -1,0 +1,26 @@
+{
+  "Version": 1,
+  "ProjectMap": {
+    "d15dc067-b907-4696-8370-84a480f21d8a": {
+      "ProjectGuid": "d15dc067-b907-4696-8370-84a480f21d8a",
+      "DisplayName": "MusicXmlBeatifier",
+      "ColorIndex": 0
+    },
+    "6f9613fa-f83e-461c-8086-9a8b2a11d1ec": {
+      "ProjectGuid": "6f9613fa-f83e-461c-8086-9a8b2a11d1ec",
+      "DisplayName": "MusicXmlBeautifier",
+      "ColorIndex": 1
+    },
+    "43ed7eae-f8fa-45dc-8bfd-42c3e2bf67ef": {
+      "ProjectGuid": "43ed7eae-f8fa-45dc-8bfd-42c3e2bf67ef",
+      "DisplayName": "CreateSheetsFromVideo",
+      "ColorIndex": 2
+    },
+    "a2fe74e1-b743-11d0-ae1a-00a0c90fffc3": {
+      "ProjectGuid": "a2fe74e1-b743-11d0-ae1a-00a0c90fffc3",
+      "DisplayName": "Miscellaneous Files",
+      "ColorIndex": -1
+    }
+  },
+  "NextColorIndex": 3
+}

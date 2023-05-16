@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<ArrayOfArrayOfArrayOfString xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ArrayOfArrayOfString>
+    <ArrayOfString>
+      <string>C:\Coding\DustinsAccordionSuite\Core\SheetsBuilder.cs</string>
+    </ArrayOfString>
+    <ArrayOfString>
+      <string>C:\Coding\DustinsAccordionSuite\MusicXmlBeautifier\Program.cs</string>
+    </ArrayOfString>
+    <ArrayOfString>
+      <string>C:\Coding\DustinsAccordionSuite\MusicXmlBeautifier\Beautifier.cs</string>
+    </ArrayOfString>
+    <ArrayOfString>
+      <string>C:\Coding\DustinsAccordionSuite\MusicXml\MusicXmlSchema(Orig).cs</string>
+    </ArrayOfString>
+    <ArrayOfString>
+      <string>C:\Coding\DustinsAccordionSuite\Helper\Extensions.cs</string>
+    </ArrayOfString>
+    <ArrayOfString>
+      <string>C:\Users\Dustin\AppData\Local\Temp\MetadataAsSource\81f04aa1d88044208664f547e30032dd\ca7faafac462480289962370f7c2cae0\Enumerable.cs</string>
+    </ArrayOfString>
+    <ArrayOfString>
+      <string>C:\Coding\DustinsAccordionSuite\Helper\Helper.cs</string>
+    </ArrayOfString>
+    <ArrayOfString>
+      <string>C:\Coding\DustinsAccordionSuite\Music classes\Enums.cs</string>
+    </ArrayOfString>
+    <ArrayOfString>
+      <string>C:\Coding\DustinsAccordionSuite\Core\Tools.cs</string>
+    </ArrayOfString>
+    <ArrayOfString>
+      <string>C:\Coding\DustinsAccordionSuite\MusicXml\MusicXmlSchemaExtensions.cs</string>
+    </ArrayOfString>
+  </ArrayOfArrayOfString>
+</ArrayOfArrayOfArrayOfString>
